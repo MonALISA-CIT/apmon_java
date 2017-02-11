@@ -1,0 +1,4 @@
+CRT_DIR=`pwd`
+export APMON_HOME=${CRT_DIR}/apmon
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CRT_DIR}/lib
+export CLASSPATH=${CLASSPATH}:${CRT_DIR}/lib/apmon.jar

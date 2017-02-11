@@ -1,0 +1,324 @@
+
+		    ApMon - Application Monitoring API for Java
+				version 2.2.7
+		  ********************************************
+		    ***************************************
+				May 2006
+			California Institute of Technology
+		    ****************************************			
+
+1. Introduction
+2. What's new in version 2.x?
+3. Installation 
+4. Using ApMon
+5. xApMon - Monitoring information
+6. Logging
+7. Bug reports
+
+1. Introduction
+****************
+  ApMon is an API that can be used by any application to send monitoring
+information to MonALISA services (http://monalisa.caltech.edu). The
+monitoring data is sent as UDP datagrams to one or more hosts running MonALISA.
+The MonALISA host may require a password enclosed in each datagram, for 
+authentication purposes. ApMon can also send datagrams that contain monitoring
+information regarding the system or the application.  
+ 
+
+2. What's new in version 2.x?
+*******************************
+  ApMon 2.0 was extended with xApMon, a feature that allows it to send to the 
+MonALISA service datagrams with monitoring information regarding the system or
+the application. This extension can be used completely on Linux systems and
+partially on Windows systems.  
+  In this ApMon version there is also the possibility to associate the 
+datagrams with timestamps set by the user.
+
+
+3. Installation
+****************
+  The ApMon archive contains the following files and folders:
+  - apmon/ - package that contains the ApMon class and other helper classes
+(including XDRDataOutput and XDROutputStream - part of a library for XDR
+encoding/decoding, provided under the LGPL license - see 
+http://java.freehep.org); apmon includes the lisa_host package, which contains
+classes from LISA (http://monalisa.caltech.edu/dev_lisa.html).
+  - lib/ - directory which will contain, after building, the libraries 
+needed in order to use ApMon
+  - examples/ - examples for using the routines
+  - lesser.txt - the LGPL license for the XDR library 
+  - destinations.conf - contains the IP addresses or DNS names of the 
+destination hosts and the ports where the MonaLisa modules listen
+  - build_apmon.sh, env_apmon - for building on Linux systems
+  - build_apmon.bat - for building on Windows systems
+  - README
+  - Doxyfile - for generating Doxygen documentation
+
+  There is an additional directory, ApMon_docs, which contains the Doxygen
+documentation of the source files.
+ 
+  To build ApMon on Linux systems:
+  1) set the JAVA_HOME environment variable to the location where Java is 
+installed
+  2) To build ApMon, cd to the ApMon directory and type:
+	./build_apmon.sh
+  The ApMon jar file (apmon.jar) and a small Linux library (libnativeapm.so)
+are now available in the lib/ directory.
+  In order to use ApMon, the CLASSPATH must contain the path to apmon.jar
+and, optionally, the LD_LIBRARY_PATH must contain the path to libnativeapm.so
+(this library only provides one function, mygetpid(), which has the
+functionality of getpid(). You might want to use it for job monitoring,   
+as in Example_x1.java and Example_x2.java). You can adjust the CLASSPATH 
+and LD_LIBRARY_PATH manually or by sourcing the env_apmon script.
+
+  To build the ApMon examples, go to the examples/ directory and type:
+	./build_examples.sh
+
+  To build ApMon on Windows systems:
+  1) add the directory that contains the apmon package to the CLASSPATH
+  2) run build_apmon.bat
+  2) when running the examples, the directory apmon\lisa_host\Windows must be 
+in the library path (the system.dll library from this directory will be used).
+This can be done by using the option -Djava.library.path:
+  java -Djava.library.path=<path to apmon\lisa_host\Windows> exampleSend_1a
+	
+
+4. Using ApMon
+*******************
+  We defined a class called ApMon, which holds the
+parameters that the user wants to include in the datagram, until the datagram
+is sent. 
+  The datagram sent to the MonaLisa module has the following structure:
+  - a header which has the following syntax: 
+      v:<ApMon_version>p:<password>       
+      
+      (the password is sent in plaintext; if the MonALISA host does not require
+      a password, an 0-length string should be sent instead of the password).
+      
+  - cluster name (string) - the name of the monitored cluster 
+  - node name (string) - the name of the monitored nodes
+  - number of parameters (int)
+  - for each parameter: name (string), value type (int), value (can be double,
+int or string)
+  - optionally a timestamp (int) if the user wants to specify the time
+associated with the data; if the timestamp is not given, the current time on
+the destination host which runs MonALISA will be used.
+
+  The ApMon class has a constructor with the name of a configuration file as
+the unique parameter. The configuration file specifies the IP addresses or
+DNS names of the hosts running MonALISA, to which the data is sent, and
+also specifies the ports on which the MonALISA service listens, on the 
+destination hosts. The configuration file contains a line of the following 
+form for each destination host:
+
+IP_address|DNS_name[:port] [password]
+
+Examples:
+rb.rogrid.pub.ro:8884 mypassword
+rb.rogrid.pub.ro:8884
+ui.rogrid.pub.ro mypassword
+ui.rogrid.pub.ro
+
+If the port is not specified, the default value 8884 will be assumed.
+If the password is not specified, an empty string will be sent as password
+to the MonALISA host (and the host will only accept the datagram if it does not
+require a password). 
+The configuration file may contain blank lines and comment lines (starting 
+with "#"); these lines are ignored, and so are the leading and the trailing
+white spaces from the other lines. 
+
+An ApMon object can also be intialized from a list which contains hostnames and
+ports as explained above, and/or URLs from where the names of the
+destination hosts and the corresponding ports are to be read; the URLs
+are associated with plain text configuration files which have the format 
+described above. The URLs can also represent requests to a servlet or a CGI
+script which can automatically provide the best configuration, taking into 
+account the geographical zone in which the machine which runs ApMon is 
+situated, and the application for which ApMon is used 
+(see Example_confgen.java). The geographical zone is determined from the
+machine's IP and the applicaiton name is given by the user as the value of the
+"appName" parameter included in the URL.
+
+ There are two ways in which the user can send parameter values to MonALISA:
+  a) a single parameter in a datagram
+  b) multiple parameters in a datagram
+
+  For sending a datagram with a single parameter, the user should call the
+function sendParameter() which has several overloaded variants.
+
+  For sending multiple parameters in a datagram, the user should call the
+function sendParameters(), which receives as arguments arrays with the names
+and the values of the parameters to be sent.
+
+  When the ApMon object is no longer in use, the stopIt() method should be
+called in order to close the UDP socket used for sending the parameters.
+
+  Since version 2.0 there are two additional functions, sendTimedParameter() 
+and sendTimedParameters(), which allow the user to specify a timestamp
+for the parameters.
+
+  The configuration file and/or URLs can be periodically checked for changes,
+but this option is disabled by default. In order to enable it, the user should
+call setConfCheck(true); the value of the time interval at which the recheck
+operatins are performed, can be set with the function setRecheckInterval().
+The way in which the configuration file or URLs are checked for
+changes can be also specified in the configuration file:
+
+  - to enable/disable the periodical checking of the configuration file
+or URLs:
+xApMon_conf_recheck = on/off
+
+  - to set the time interval at which the file/URLs are checked for changes:
+xApMon_recheck_interval = <number_of_seconds>
+ 
+  For a better understanding of how to use the functions mentioned above, see
+the Doxygen documentation and the examples.
+
+  LIMITATIONS:
+  The maximum size of a datagram is specified by the constant MAX_DGRAM_SIZE;
+by default it is 8192B and the user should not modify this value as some hosts
+may not support UDP datagrams larger than 8KB. 
+
+
+5. xApMon - Monitoring information
+***********************************
+ApMon can be configured to send to the MonALISA service monitoring information 
+regarding the application or the system. The system monitoring information
+is obtained from the proc/ filesystem and the job monitoring information is
+obtained by parsing the output of the ps command. If job monitoring for a
+process is requested, all its sub-processes will be taken into consideration
+(i.e., the resources consumed by the process and all the subprocesses will be
+summed).
+
+There are three categories of monitoring datagrams that ApMon can send:
+
+a) job monitoring information - contains the following parameters:
+
+   job_run_time		- elapsed time from the start of this job
+   job_cpu_time   	- processor time spent running this job
+   job_cpu_usage	- percent of the processor used for this job, as 
+			  reported by ps
+   job_virtualmem 	- virtual memory occupied by the job (in KB)
+   job_rss              - resident image size of the job (in KB)
+   job_mem_usage	- percent of the memory occupied by the job, as 
+			  reported by ps
+   job_workdir_size     - size in MB of the working directory of the job
+   job_disk_total       - size in MB of the disk partition containing the 
+			  working directory
+   job_disk_used        - size in MB of the used disk space on the partition 
+			  containing the working directory
+   job_disk_free        - size in MB of the free disk space on the partition 
+			  containing the working directory
+   job_disk_usage       - percent of the used disk partition containing the 
+			  working directory
+
+
+b) system monitoring information - contains the following parameters:
+
+   sys_cpu_usr  	- percent of the time spent by the CPU in user mode 
+   sys_cpu_sys          - percent of the time spent by the CPU in system mode
+   sys_cpu_nice		- percent of the time spent by the CPU in nice mode
+   sys_cpu_idle		- percent of the time spent by the CPU in idle mode
+   sys_cpu_usage 	- CPU usage percent
+   sys_load1            - average system load over the last minute
+   sys_load5		- average system load over the last 5 min
+   sys_load15		- average system load over the last 15 min
+   sys_mem_used         - amount of currently used memory, in MB
+   sys_mem_free		- amount of free memory, in MB
+   sys_mem_usage	- used system memory in percent
+   sys_swap_used        - amount of currently used swap, in MB 
+   sys_swap_free	- amount of free swap, in MB
+   sys_swap_usage	- swap usage in percent
+   sys_net_in           - network (input)  transfer in kBps
+   sys_net_out          - network (input)  transfer in kBp   
+  (these will produce params called sys_ethX_in, sys_ethX_out, sys_ethX_errs, 
+   corresponding to each network interface)
+   sys_processes	- curent number of processes
+   sys_uptime		- system uptime in days
+        
+ In the other ApMon versions there also is a parameter called "sys_net_errs"
+ (the number of network errors). This parameter is not available in
+ the Java version, but can be present in the configuration file, for 
+compatibility with the other versions.
+
+c) general system information - contains the following parameters:
+   hostname		
+   ip                  	- will produce ethX_ip params for each interface
+   cpu_MHz		- CPU frequency
+   no_CPUs             	- number of CPUs
+   total_mem		- total amount of memory, in MB
+   total_swap		- total amount of swap, in MB
+   cpu_vendor_id	- the CPU's vendor ID
+   cpu_family
+   cpu_model
+   cpu_model_name
+   bogomips             - number of bogomips for the CPU  
+   
+
+
+These parameters are only available on Linux systems. 
+ 
+The parameters from a) and b)  can be enabled/disabled from the 
+configuration file (if they are disabled, they will not be included in the
+datagrams). In order to enable/disable a parameter, the user should write in
+the configuration file lines of the following form:
+
+xApMon_parametername = on/off
+
+(example: xApMon_sys_load1 = off)
+
+The job/system monitoring can be enabled/disabled by including the following 
+lines in the configuration file:
+
+xApMon_job_monitoring = on/off
+xApMon_sys_monitoring = on/off
+
+The datagrams with general system information are only sent if system 
+monitoring is enabled, at greater time intervals (2 datagrams with general
+system information for each 100 system monitoring datagrams). To enable/
+disable the sending of general system information datagrams, the following
+line should be written in the configuration file:
+
+xApMon_general_info = on/off
+
+The time interval at which job/system monitoring datagrams are sent can be set
+with:
+
+xApMon_job_interval = <number_of_seconds>
+xApMon_sys_interval = <number_of_seconds>
+
+To enable/disable the job/system monitoring, and also to set the time 
+intervals, the functions setJobMonitoring() and setSysMonitoring() can be
+used (see the API docs for more details).
+
+To monitor jobs, you have to specify the PID of the parent process for the 
+tree of processes that you want to monitor, the working directory, the cluster 
+and the node names that will be registered in MonALISA (and also the job 
+monitoring must be enabled). If work directory is "", no information will be 
+retrieved about disk:
+  addJobToMonitor(long pid, String workdir, String clusterName,
+			    String nodeName);
+
+  To stop monitoring a job, the removeJobToMonitor(long pid) should be called.
+
+6. Logging
+***********
+  ApMon prints its messages to a file called apmon.log, with the aid of the 
+Logger class from the Java API. The user may print its own messages
+with the logger (see the examples).
+The ApMon loglevels are FATAL (equivalent to Level.SEVERE), WARNING, INFO, 
+FINE, DEBUG (equivalent to Level.FINEST). The ApMon loglevel can be
+set from the configuration file (by default it is INFO):
+
+xApMon_loglevel = <level>
+e.g.,
+xApMon_loglevel = FINE
+
+  When setting the loglevel in the configuration file, you must use the ApMon 
+level names rather than the Java names (so that the configuration file be
+compatible with the other ApMon versions).
+
+7. Bug reports
+***************
+  For bug reports, suggestions and comments please write to: 
+  MonALISA-CIT@cern.ch
