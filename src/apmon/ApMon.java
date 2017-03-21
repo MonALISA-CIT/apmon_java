@@ -1280,7 +1280,7 @@ public class ApMon {
             xdrOS.pad();
             xdrOS.writeString(nodeName);
             xdrOS.pad();
-            xdrOS.writeInt(nParams);
+            xdrOS.writeInt(nParams-start);
             xdrOS.pad();
 
             Object oValue;
