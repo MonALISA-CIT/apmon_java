@@ -3,7 +3,11 @@
 if ! [ -d lib ]; then
     mkdir lib
 fi
- 
+
+if [ -d /usr/lib/jvm/default-java/include ]; then
+    export JAVA_HOME=${JAVA_HOME:=/usr/lib/jvm/default-java}
+fi
+
 cd src/apmon/util
 if ./compile.sh; then
     mv libnativeapm.so ../../../lib
@@ -21,10 +25,10 @@ mkdir -p build/classes
 
 cd src
 
-find apmon -name \*.java | xargs javac -g -d ../build/classes 
+find apmon -name \*.java | xargs javac -g -d ../build/classes
 
-mkdir -p ../../build/classes/apmon/lisa_host/Windows
-cp apmon/lisa_host/Windows/*.dll ../../build/classes/apmon/lisa_host/Windows/
+mkdir -p ../build/classes/apmon/lisa_host/Windows
+cp apmon/lisa_host/Windows/*.dll ../build/classes/apmon/lisa_host/Windows/
 
 cd ../build/classes
 
