@@ -124,7 +124,7 @@ public class MacHostPropertiesMonitor {
 
 		// get CPU, load, Mem, Pages, Processes from '/usr/bin/top'
 		command = sep + "usr" + sep + "bin" + sep
-				+ "top -d -l2 -n1 -F -R -X";
+				+ "top -d -l2 -n1 -F -R";
 		String result = execute.executeCommand(command, "PID", 2);
 		//System.out.println(command + " = "+ result);
 		if (result == null || result.equals("")) {
@@ -253,36 +253,36 @@ public class MacHostPropertiesMonitor {
 
 		//		 Get number of total Processes
 		try {
-			pointA = toParse.indexOf("Procs:");
-			//System.out.println("First Procs at " + pointA);
-			pointA = toParse.indexOf("Procs:", pointA + 6) + 6;
-			//System.out.println("Second Procs at " + pointA);
+			pointA = toParse.indexOf("Processes:");
+			//System.out.println("First Processes at " + pointA);
+			pointA = toParse.indexOf("Processes:", pointA + 12) + 12;
+			//System.out.println("Second Processes at " + pointA);
 			pointB = toParse.indexOf(",", pointA + 1);
 			nbProcesses = toParse.substring(pointA, pointB).trim();
-			//System.out.println(nbProcesses + " processes");
+			//System.out.println("Processes: " + nbProcesses);
 		} catch (java.lang.StringIndexOutOfBoundsException e) {
 			// ignore
 		}
 
 		// Get the loads...
 		try {
-			pointA = toParse.indexOf("LoadAvg:", pointA);
+			pointA = toParse.indexOf("Load Avg:", pointA);
 			pointA += 9;
 			pointB = toParse.indexOf(",", pointA);
 			load1 = toParse.substring(pointA, pointB).trim();
 			pointA = toParse.indexOf(",", pointB + 1);
 			load5 = toParse.substring(pointB + 1, pointA).trim();
-			pointB = toParse.indexOf("CPU:", pointA + 1);
+			pointB = toParse.indexOf("CPU usage:", pointA + 1);
 			pointB = toParse.lastIndexOf(".", pointB);
 			load15 = toParse.substring(pointA + 1, pointB).trim();
-			//System.out.println("load: [" + load1 + "][" + load5 + "][" + load15 + "]");
+			//System.out.println("Load: [" + load1 + "][" + load5 + "][" + load15 + "]");
 		} catch (java.lang.StringIndexOutOfBoundsException e) {
 			// ignore
 		}
 
 		// Get CPUs...
 		try {
-			pointB = toParse.indexOf("CPU:", pointB + 1) + 4;
+			pointB = toParse.indexOf("CPU usage:", pointB + 1) + 4;
 			pointA = toParse.indexOf("% user", pointB);
 			cpuUSR = toParse.substring(pointB, pointA).trim();
 			pointA = toParse.indexOf(",", pointA);
@@ -302,77 +302,84 @@ public class MacHostPropertiesMonitor {
 
 		//		 Get Mem...
 		try {
-			pointA = toParse.indexOf("PhysMem", pointB);
+			pointA = toParse.indexOf("PhysMem:", pointB);
 			pointA += 8;
 			pointB = toParse.indexOf("M used", pointA);
-			pointA = toParse.lastIndexOf(",", pointB);
+			double factor = 1;
+			if (pointB == -1){
+				factor = 1024;
+				pointB = toParse.indexOf("G used", pointA);
+			}
+			//pointA = toParse.lastIndexOf(",", pointB);
 			memUsed = toParse.substring(pointA + 1, pointB).trim();
-			pointB = toParse.indexOf("M free", pointB);
+			pointB = toParse.indexOf("M unused", pointB);
 			pointA = toParse.lastIndexOf(",", pointB);
 			memFree = toParse.substring(pointA + 1, pointB).trim();
-			//System.out.println("Mem Used:"+memUsed+"M Free:"+memFree+"M");
-			sum = Double.parseDouble(memUsed) + Double.parseDouble(memFree);
+			double memUsedD = Double.parseDouble(memUsed)*factor;
+			//System.out.println("Mem Used: "+memUsedD+"M Free: "+memFree+"M");
+			sum = memUsedD + Double.parseDouble(memFree);
 			double percentage = Integer.parseInt(memUsed) / sum * 100;
 			memUsage = String.valueOf(percentage);
 		} catch (java.lang.StringIndexOutOfBoundsException e) {
 			// ignore
 		}
 
+
 		// Pages In/Out...
 		try {
-			pointA = toParse.indexOf("VirtMem:", pointB + 6);
-			pointB = toParse.indexOf("pagein", pointA);
+			pointA = toParse.indexOf("VM:", pointB + 6);
+			pointB = toParse.indexOf("swapins", pointA);
 			pointA = toParse.lastIndexOf(",", pointB);
 			pagesIn = toParse.substring(pointA + 1, pointB).trim();
-			pointA = toParse.indexOf("pageout", pointB);
+			pointA = toParse.indexOf("swapouts", pointB);
 			pointB = toParse.lastIndexOf(",", pointA);
 			pagesOut = toParse.substring(pointB + 1, pointA).trim();
-			//System.out.println("Pages In:" + pagesIn + " Out" + pagesOut);
+			//System.out.println("Swaps In: " + pagesIn + " Out: " + pagesOut);
 		} catch (java.lang.StringIndexOutOfBoundsException e) {
-			System.out.println("Can't find pages in :" + toParse);
+			System.out.println("Can't find swaps in :" + toParse);
 		}
 
-		// Get Network IO...
-		try {
-			pointA = toParse.indexOf("Networks:", pointB) + 9;
-			pointB = toParse.indexOf("data =", pointA) + 6;
-			pointA = toParse.indexOf("in", pointB);
-			unitPos = lastIndexOfUnitLetter(toParse, pointA);
-			netIn = toParse.substring(pointB, unitPos).trim();
-			//System.out.print("Net In:" + netIn);
-			double factor =
-				howMuchMegaBytes(
-					(toParse.substring(unitPos, unitPos + 1).toCharArray())[0]);
-			netIn = String.valueOf(Double.parseDouble(netIn) * factor * 4);
-			pointB = toParse.indexOf("out", pointA);
-			unitPos = lastIndexOfUnitLetter(toParse, pointB);
-			factor =
-				howMuchMegaBytes(
-					(toParse.substring(unitPos, unitPos + 1).toCharArray())[0]);
-			netOut = toParse.substring(pointA + 3, unitPos).trim();
-			//System.out.println("Net Out:" + netOut);
-			netOut = String.valueOf(Double.parseDouble(netOut) * factor);
-			//System.out.println("Network In:" + netIn + " OUT:" + netOut);
-		} catch (java.lang.StringIndexOutOfBoundsException e) {
-			System.out.println(e);
-		}
-
-		// Get Disks IO...
-		try {
-			pointB = toParse.indexOf("Disks:", pointA) + 6;
-			pointA = toParse.indexOf("data =", pointB) + 6;
-			pointB = toParse.indexOf("in,", pointA);
-			unitPos = lastIndexOfUnitLetter(toParse, pointB);
-			diskIn = toParse.substring(pointA, unitPos).trim();
-			pointA = toParse.indexOf("out", pointB);
-			unitPos = lastIndexOfUnitLetter(toParse, pointA);
-			diskOut = toParse.substring(pointB + 3, unitPos).trim();
-
-			//System.out.println("diskIO In:" + diskIn + " Out:" + diskOut);
-			diskIO = diskIn + diskOut;
-		} catch (java.lang.StringIndexOutOfBoundsException e) {
-			// ignore
-		}
+//		// Get Network IO...
+//		try {
+//			pointA = toParse.indexOf("Networks:", pointB) + 9;
+//			pointB = toParse.indexOf("packets:", pointA) + 6;
+//			pointA = toParse.indexOf("in", pointB);
+//			unitPos = lastIndexOfUnitLetter(toParse, pointA);
+//			netIn = toParse.substring(pointB, unitPos).trim();
+//			System.out.print("Net In:" + netIn);
+//			double factor =
+//				howMuchMegaBytes(
+//					(toParse.substring(unitPos, unitPos + 1).toCharArray())[0]);
+//			netIn = String.valueOf(Double.parseDouble(netIn) * factor * 4);
+//			pointB = toParse.indexOf("out", pointA);
+//			unitPos = lastIndexOfUnitLetter(toParse, pointB);
+//			factor =
+//				howMuchMegaBytes(
+//					(toParse.substring(unitPos, unitPos + 1).toCharArray())[0]);
+//			netOut = toParse.substring(pointA + 3, unitPos).trim();
+//			System.out.println("Net Out:" + netOut);
+//			netOut = String.valueOf(Double.parseDouble(netOut) * factor);
+//			System.out.println("Network In:" + netIn + " OUT:" + netOut);
+//		} catch (java.lang.StringIndexOutOfBoundsException e) {
+//			System.out.println(e);
+//		}
+//
+//		// Get Disks IO...
+//		try {
+//			pointB = toParse.indexOf("Disks:", pointA) + 6;
+//			//pointA = toParse.indexOf("data =", pointB) + 6;
+//			pointB = toParse.indexOf("read,", pointA);
+//			unitPos = lastIndexOfUnitLetter(toParse, pointB);
+//			diskIn = toParse.substring(pointA, unitPos).trim();
+//			pointA = toParse.indexOf("written", pointB);
+//			unitPos = lastIndexOfUnitLetter(toParse, pointA);
+//			diskOut = toParse.substring(pointB + 3, unitPos).trim();
+//
+//			System.out.println("diskIO In:" + diskIn + " Out:" + diskOut);
+//			diskIO = diskIn + diskOut;
+//		} catch (java.lang.StringIndexOutOfBoundsException e) {
+//			// ignore
+//		}
 	}
     
     /**

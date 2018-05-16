@@ -56,7 +56,7 @@ import apmon.lisa_host.cmdExec;
  * Separate thread which periodically checks the configuration file/URLs for changes and periodically sends datagrams
  * with monitoring information.
  */
-class BkThread extends Thread {
+public class BkThread extends Thread {
 
     /* types of operations that this thread executes */
     private static final int RECHECK_CONF = 0;
