@@ -203,7 +203,7 @@ public class ApMon {
      * The background thread which performs operations like checking the configuration file/URLs for changes and sending
      * datagrams with monitoring information.
      */
-    BkThread bkThread = null;
+    public BkThread bkThread = null;
 
     /** Is true if the background thread was started. */
     boolean bkThreadStarted = false;
