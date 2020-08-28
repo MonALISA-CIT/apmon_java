@@ -1,6 +1,6 @@
 
 		    ApMon - Application Monitoring API for Java
-				version 2.2.7
+				version 2.2.8
 		  ********************************************
 		    ***************************************
 				May 2006
@@ -199,7 +199,9 @@ a) job monitoring information - contains the following parameters:
    job_cpu_usage	- percent of the processor used for this job, as 
 			  reported by ps
    job_virtualmem 	- virtual memory occupied by the job (in KB)
-   job_rss              - resident image size of the job (in KB)
+   job_rss          - resident image size of the job (in KB)
+   job_pss			- proportional set size (in KB)
+   job_swappss		- swapped proportional set size (in KB)
    job_mem_usage	- percent of the memory occupied by the job, as 
 			  reported by ps
    job_workdir_size     - size in MB of the working directory of the job
