@@ -687,12 +687,12 @@ public final class ApMonMonitoringConstants {
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_DISK_FREE, "disk_free");
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_DISK_USAGE, "disk_usage");
         
-        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_VIRTUALMEM, "job_virtualmem");
-        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_RSS, "job_rss");
+        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_VIRTUALMEM, "virtualmem");
+        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_RSS, "rss");
 		HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_OPEN_FILES, "open_files");
 
-        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_PSS, "job_pss");
-		HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_SWAPPSS, "job_swappss");
+        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_PSS, "pss");
+		HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_SWAPPSS, "swappss");
     }    
 
     /**
