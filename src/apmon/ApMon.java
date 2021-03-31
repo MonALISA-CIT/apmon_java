@@ -390,6 +390,7 @@ public class ApMon {
 		mValueTypes.put(String.class.getName(), Integer.valueOf(XDR_STRING));
 		mValueTypes.put(Short.class.getName(), Integer.valueOf(XDR_INT32));
 		mValueTypes.put(Integer.class.getName(), Integer.valueOf(XDR_INT32));
+		mValueTypes.put(Long.class.getName(), Integer.valueOf(XDR_REAL64));
 		mValueTypes.put(Float.class.getName(), Integer.valueOf(XDR_REAL64));
 		mValueTypes.put(Double.class.getName(), Integer.valueOf(XDR_REAL64));
 	}
@@ -909,8 +910,7 @@ public class ApMon {
 	 * @throws IOException
 	 */
 	public void sendTimedParameters(String clustername, String nodename, int nParams, Vector<String> paramNames, @SuppressWarnings("unused") Vector<?> valueTypes, Vector<Object> paramValues,
-			int timestamp)
-			throws ApMonException, UnknownHostException, SocketException, IOException {
+			int timestamp) throws ApMonException, UnknownHostException, SocketException, IOException {
 		sendTimedParameters(clustername, nodename, nParams, paramNames, paramValues, timestamp);
 	}
 
@@ -1348,19 +1348,19 @@ public class ApMon {
 				xdrOS.pad();
 				/** parameter value */
 				switch (valType) {
-					case XDR_STRING:
-						xdrOS.writeString((String) paramValues.get(i));
-						break;
-					case XDR_INT32:// INT16 is not supported
-						int ival = ((Integer) paramValues.get(i)).intValue();
-						xdrOS.writeInt(ival);
-						break;
-					case XDR_REAL64: // REAL32 is not supported
-						double dval = ((Double) paramValues.get(i)).doubleValue();
-						xdrOS.writeDouble(dval);
-						break;
-					default:
-						throw new ApMonException("Unknown type for XDR encoding");
+				case XDR_STRING:
+					xdrOS.writeString((String) paramValues.get(i));
+					break;
+				case XDR_INT32:// INT16 is not supported
+					int ival = ((Number) paramValues.get(i)).intValue();
+					xdrOS.writeInt(ival);
+					break;
+				case XDR_REAL64: // REAL32 is not supported
+					double dval = ((Number) paramValues.get(i)).doubleValue();
+					xdrOS.writeDouble(dval);
+					break;
+				default:
+					throw new ApMonException("Unknown type for XDR encoding");
 				}
 				xdrOS.pad();
 
