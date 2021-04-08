@@ -316,7 +316,7 @@ public class ApMon {
 	String myIP = null;
 
 	/** The number of CPUs on the machine that runs ApMon. */
-	int numCPUs;
+	int numCPUs = 1;
 
 	/** The names of the network interfaces on this machine. */
 	Vector<String> netInterfaces = new Vector<>();
@@ -424,7 +424,7 @@ public class ApMon {
 	 * @param nodename
 	 */
 	public void addJobToMonitor(final int pid, final String workDir, final String clustername, final String nodename) {
-		final MonitoredJob job = new MonitoredJob(pid, workDir, clustername, nodename);
+		final MonitoredJob job = new MonitoredJob(pid, workDir, clustername, nodename, numCPUs);
 
 		if (!monJobs.contains(job)) {
 			monJobs.add(job);
@@ -618,6 +618,15 @@ public class ApMon {
 		initMonitoring();
 		arrayInit(destAddresses, destPorts, destPasswds);
 	}
+
+	/**
+	 * Sets the number of CPU Cores that the job will make use of.
+	 * @param numCPUs
+	 *            The number of CPU Cores to be used.
+	 */
+	public void setNumCPUs(int numCPUs) {
+		this.numCPUs = numCPUs;
+	 }
 
 	/**
 	 * Parses a configuration file which contains addresses, ports and passwords for the destination hosts and puts the

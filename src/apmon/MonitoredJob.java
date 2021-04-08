@@ -66,18 +66,21 @@ public class MonitoredJob {
 
 	private cmdExec exec = null;
 
+	final int numCPUs;
+
 	/**
 	 * @param _pid
 	 * @param _workDir
 	 * @param _clusterName
 	 * @param _nodeName
 	 */
-	public MonitoredJob(int _pid, String _workDir, String _clusterName, String _nodeName) {
+	public MonitoredJob(int _pid, String _workDir, String _clusterName, String _nodeName, int _numCPUs) {
 		this.pid = _pid;
 		this.workDir = _workDir;
 		this.clusterName = _clusterName;
 		this.nodeName = _nodeName;
 		this.exec = new cmdExec();
+		this.numCPUs = _numCPUs;
 	}
 
 	/**
@@ -348,23 +351,23 @@ public class MonitoredJob {
 				}
 			}
 		}
-		
-		ret.put(ApMonMonitoringConstants.LJOB_RUN_TIME, Double.valueOf(etime));
+
+		ret.put(ApMonMonitoringConstants.LJOB_RUN_TIME, Double.valueOf(etime * numCPUs));
 		ret.put(ApMonMonitoringConstants.LJOB_CPU_TIME, Double.valueOf(cputime));
 		ret.put(ApMonMonitoringConstants.LJOB_CPU_USAGE, Double.valueOf(pcpu));
 		ret.put(ApMonMonitoringConstants.LJOB_MEM_USAGE, Double.valueOf(pmem));
 		ret.put(ApMonMonitoringConstants.LJOB_RSS, Double.valueOf(rsz));
 		ret.put(ApMonMonitoringConstants.LJOB_VIRTUALMEM, Double.valueOf(vsz));
 		ret.put(ApMonMonitoringConstants.LJOB_OPEN_FILES, Double.valueOf(fd));
-		
+
 		if (pssKB == 0 && rsz > 0) {
 			// fake the PSS values if they are not supported, assuming that
 			// PSS == RSS and SwapPSS = Virtual - RSS
-			
+
 			pssKB = rsz;
 			swapPssKB = vsz - rsz;
 		}
-		
+
 		ret.put(ApMonMonitoringConstants.LJOB_PSS, Double.valueOf(pssKB));
 		ret.put(ApMonMonitoringConstants.LJOB_SWAPPSS, Double.valueOf(swapPssKB));
 
