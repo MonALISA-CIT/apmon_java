@@ -315,7 +315,7 @@ public class ApMon {
 	/** The IP address of the host on which ApMon currently runs. */
 	String myIP = null;
 
-	/** The number of CPUs on the machine that runs ApMon. */
+	/** The number of CPUs allocated to the job slot (wall time multiplier). */
 	int numCPUs = 1;
 
 	/** The names of the network interfaces on this machine. */

@@ -74,6 +74,17 @@ public class MonitoredJob {
 	 * @param _clusterName
 	 * @param _nodeName
 	 */
+	public MonitoredJob(int _pid, String _workDir, String _clusterName, String _nodeName) {
+		this(_pid, _workDir, _clusterName, _nodeName, 1);
+	}
+
+	/**
+	 * @param _pid
+	 * @param _workDir
+	 * @param _clusterName
+	 * @param _nodeName
+	 * @param _numCPUs 
+	 */
 	public MonitoredJob(int _pid, String _workDir, String _clusterName, String _nodeName, int _numCPUs) {
 		this.pid = _pid;
 		this.workDir = _workDir;
@@ -314,26 +325,26 @@ public class MonitoredJob {
 
 		double pssKB = 0;
 		double swapPssKB = 0;
-		
-		for (Integer child: children) {
-			File f = new File("/proc/"+child+"/smaps");
-			
+
+		for (Integer child : children) {
+			File f = new File("/proc/" + child + "/smaps");
+
 			if (f.exists() && f.canRead()) {
-				try (BufferedReader br = new BufferedReader(new FileReader(f))){					
+				try (BufferedReader br = new BufferedReader(new FileReader(f))) {
 					String s;
-					
-					while ( (s=br.readLine())!=null ) {
+
+					while ((s = br.readLine()) != null) {
 						// File content is something like this (the keys that we are missing from the `ps` output only):
-						// Pss:                  16 kB
-						// SwapPss:               0 kB
+						// Pss: 16 kB
+						// SwapPss: 0 kB
 						if (s.startsWith("Pss:") || s.startsWith("SwapPss:")) {
 							final StringTokenizer st = new StringTokenizer(s);
-							
-							if (st.countTokens()==3) {
+
+							if (st.countTokens() == 3) {
 								st.nextToken();
 								try {
 									long value = Long.parseLong(st.nextToken());
-									
+
 									if (s.startsWith("S"))
 										swapPssKB += value;
 									else
