@@ -213,7 +213,7 @@ public class cmdExec {
 				}
 				if (expect != null) {
 					out = output.getOutput();
-					if (out != "" && out.indexOf(expect) != -1) {
+					if (!out.isEmpty() && out.indexOf(expect) != -1) {
 						isError = false;
 						break;
 					}
@@ -325,7 +325,7 @@ public class cmdExec {
 				}
 				if (expect != null) {
 					out = output.getOutput();
-					if (out != "" && out.indexOf(expect) != -1) {
+					if (!out.isEmpty() && out.indexOf(expect) != -1) {
 						nr = getStringOccurences(out, expect);
 						if (nr >= howManyTimes) {
 							isError = false;
@@ -453,7 +453,7 @@ public class cmdExec {
 				}
 				if (expect != null) {
 					out = output.forceAllOutput();
-					if (out != "" && out.indexOf(expect) != -1) {
+					if (!out.isEmpty() && out.indexOf(expect) != -1) {
 						isError = false;
 						break;
 					}
@@ -564,7 +564,7 @@ public class cmdExec {
 				}
 				if (expect != null) {
 					out = output.forceAllOutput();
-					if (out != "" && out.indexOf(expect) != -1) {
+					if (!out.isEmpty() && out.indexOf(expect) != -1) {
 						int nr = getStringOccurences(out, expect);
 						if (nr >= howManyTimes) {
 							isError = false;
