@@ -83,7 +83,7 @@ public class MonitoredJob {
 	 * @param _workDir
 	 * @param _clusterName
 	 * @param _nodeName
-	 * @param _numCPUs 
+	 * @param _numCPUs
 	 */
 	public MonitoredJob(int _pid, String _workDir, String _clusterName, String _nodeName, int _numCPUs) {
 		this.pid = _pid;
@@ -112,9 +112,21 @@ public class MonitoredJob {
 		if (workDir == null)
 			return null;
 
-		cmd = "du -Lscm " + workDir + " | tail -1 | cut -f 1";
+		cmd = "POSIXLY_CORRECT=1 find -H '" + workDir + "' -xdev -ls | awk '{ s += $2 / $4 } END { print int(s / 2) }'";
 		result = exec.executeCommandReality(cmd, "");
-		workdir_size = Double.parseDouble(result);
+
+		try {
+			workdir_size = Double.parseDouble(result);
+		}
+		catch (NumberFormatException nfe) {
+			if (logger.isLoggable(Level.WARNING))
+				logger.log(Level.WARNING, "Exception parsing the output of `" + cmd + "`", nfe);
+
+			cmd = "du -Lscm " + workDir + " | tail -1 | cut -f 1";
+			result = exec.executeCommandReality(cmd, "");
+			workdir_size = Double.parseDouble(result);
+		}
+
 		hm.put(ApMonMonitoringConstants.LJOB_WORKDIR_SIZE, Double.valueOf(workdir_size));
 
 		cmd = "df -P -m " + workDir + " | tail -1";
@@ -399,10 +411,19 @@ public class MonitoredJob {
 		File f = new File(dir);
 		if (f.exists()) {
 			if (f.canRead()) {
-				open_files = (f.list()).length - 2;
-				if (processid == mypid)
-					open_files -= 2;
-				logger.log(Level.FINE, "Counting open_files for process " + processid);
+				final String[] listing = f.list();
+				if (listing != null) {
+					open_files = (f.list()).length - 2;
+
+					if (processid == mypid)
+						open_files -= 2;
+
+					logger.log(Level.FINE, "Counting open_files for process " + processid);
+				}
+				else {
+					open_files = -1;
+					logger.log(Level.SEVERE, "ProcInfo: null listing of " + dir);
+				}
 			}
 			else {
 				open_files = -1;
