@@ -570,7 +570,7 @@ public final class ApMonMonitoringConstants {
      */
     public static final long JOB_WORKDIR_SIZE   =   0x10L;
     /**
-     * 
+     * Work directory size, in MB
      */
     public static final Long LJOB_WORKDIR_SIZE  =   Long.valueOf(JOB_WORKDIR_SIZE);
     /**
