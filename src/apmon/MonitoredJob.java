@@ -116,20 +116,20 @@ public class MonitoredJob {
 		result = exec.executeCommandReality(cmd, "");
 
 		try {
-			workdir_size = Double.parseDouble(result);
+			workdir_size = Double.parseDouble(result) / 1024;
 		}
 		catch (NumberFormatException nfe) {
 			if (logger.isLoggable(Level.WARNING))
 				logger.log(Level.WARNING, "Exception parsing the output of `" + cmd + "`", nfe);
 
-			cmd = "du -Lscm " + workDir + " | tail -1 | cut -f 1";
+			cmd = "du -Lscm '" + workDir + "' | tail -1 | cut -f 1";
 			result = exec.executeCommandReality(cmd, "");
 			workdir_size = Double.parseDouble(result);
 		}
 
 		hm.put(ApMonMonitoringConstants.LJOB_WORKDIR_SIZE, Double.valueOf(workdir_size));
 
-		cmd = "df -P -m " + workDir + " | tail -1";
+		cmd = "df -P -m '" + workDir + "' | tail -1";
 		result = exec.executeCommand(cmd, "");
 		final StringTokenizer st = new StringTokenizer(result, " \t%");
 
