@@ -49,9 +49,9 @@ import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Map;
-import java.util.Random;
 import java.util.StringTokenizer;
 import java.util.Vector;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.FileHandler;
 import java.util.logging.Level;
@@ -340,7 +340,7 @@ public class ApMon {
 	 */
 	private final AtomicInteger SEQ_NR = new AtomicInteger(0);
 
-	private final int INSTANCE_ID = new Random(System.currentTimeMillis()).nextInt(0x7FFFFFFF);
+	private final int INSTANCE_ID = ThreadLocalRandom.current().nextInt(0x7FFFFFFF);
 
 	private static final Logger logger = Logger.getLogger("apmon");
 
@@ -435,7 +435,7 @@ public class ApMon {
 	}
 
 	/**
-	 * Remove a pid form monitorized jobs vector
+	 * Remove a pid form monitored jobs vector
 	 * 
 	 * @param pid
 	 */
@@ -621,12 +621,13 @@ public class ApMon {
 
 	/**
 	 * Sets the number of CPU Cores that the job will make use of.
+	 * 
 	 * @param numCPUs
 	 *            The number of CPU Cores to be used.
 	 */
 	public void setNumCPUs(int numCPUs) {
 		this.numCPUs = numCPUs;
-	 }
+	}
 
 	/**
 	 * Parses a configuration file which contains addresses, ports and passwords for the destination hosts and puts the
@@ -1357,19 +1358,19 @@ public class ApMon {
 				xdrOS.pad();
 				/** parameter value */
 				switch (valType) {
-				case XDR_STRING:
-					xdrOS.writeString((String) paramValues.get(i));
-					break;
-				case XDR_INT32:// INT16 is not supported
-					int ival = ((Number) paramValues.get(i)).intValue();
-					xdrOS.writeInt(ival);
-					break;
-				case XDR_REAL64: // REAL32 is not supported
-					double dval = ((Number) paramValues.get(i)).doubleValue();
-					xdrOS.writeDouble(dval);
-					break;
-				default:
-					throw new ApMonException("Unknown type for XDR encoding");
+					case XDR_STRING:
+						xdrOS.writeString((String) paramValues.get(i));
+						break;
+					case XDR_INT32:// INT16 is not supported
+						int ival = ((Number) paramValues.get(i)).intValue();
+						xdrOS.writeInt(ival);
+						break;
+					case XDR_REAL64: // REAL32 is not supported
+						double dval = ((Number) paramValues.get(i)).doubleValue();
+						xdrOS.writeDouble(dval);
+						break;
+					default:
+						throw new ApMonException("Unknown type for XDR encoding");
 				}
 				xdrOS.pad();
 
@@ -2113,8 +2114,6 @@ public class ApMon {
 	 */
 	protected double hWeight = Math.exp(-5.0 / 60.0);
 
-	private static final Random random = new Random(System.currentTimeMillis());
-
 	/**
 	 * Decide if the current datagram should be sent. This decision is based on the number of messages previously sent.
 	 * 
@@ -2143,9 +2142,7 @@ public class ApMon {
 		final int level = this.maxMsgRate - this.maxMsgRate / 10;
 
 		if (valSent > (this.maxMsgRate - level)) {
-			synchronized (random) {
-				doSend = random.nextInt(this.maxMsgRate / 10) < (this.maxMsgRate - valSent);
-			}
+			doSend = ThreadLocalRandom.current().nextInt(this.maxMsgRate / 10) < (this.maxMsgRate - valSent);
 		}
 
 		/** counting sent and dropped messages */
