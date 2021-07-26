@@ -490,7 +490,7 @@ public class ProcReader {
 		if (exec.isError())
 			output = null;
 		double size = 0.0, used = 0.0, available = 0.0, usage = 0.0;
-		if (output != null && output != "") {
+		if (output != null && !output.isEmpty()) {
 			parser.parse(output);
 			line = parser.nextToken(" \t\n");
 			int nr = 0;
