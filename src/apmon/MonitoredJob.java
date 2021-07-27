@@ -111,8 +111,10 @@ public class MonitoredJob {
 
 		if (workDir == null)
 			return null;
+		
+		final String safeWorkDir = workDir.replace("'", "'\\''");
 
-		cmd = "POSIXLY_CORRECT=1 find -H '" + workDir + "' -xdev -ls | awk '{ s += $2 / $4 } END { print int(s / 2) }'";
+		cmd = "POSIXLY_CORRECT=1 find -H '" + safeWorkDir + "' -xdev -ls | awk '{ s += $2 / $4 } END { print int(s / 2) }'";
 		result = exec.executeCommandReality(cmd, "");
 
 		try {
@@ -122,14 +124,14 @@ public class MonitoredJob {
 			if (logger.isLoggable(Level.WARNING))
 				logger.log(Level.WARNING, "Exception parsing the output of `" + cmd + "`", nfe);
 
-			cmd = "du -Lscm '" + workDir + "' | tail -1 | cut -f 1";
+			cmd = "du -Lscm '" + safeWorkDir + "' | tail -1 | cut -f 1";
 			result = exec.executeCommandReality(cmd, "");
 			workdir_size = Double.parseDouble(result);
 		}
 
 		hm.put(ApMonMonitoringConstants.LJOB_WORKDIR_SIZE, Double.valueOf(workdir_size));
 
-		cmd = "df -P -m '" + workDir + "' | tail -1";
+		cmd = "df -P -m '" + safeWorkDir + "' | tail -1";
 		result = exec.executeCommand(cmd, "");
 		final StringTokenizer st = new StringTokenizer(result, " \t%");
 
