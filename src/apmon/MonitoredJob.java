@@ -114,7 +114,7 @@ public class MonitoredJob {
 		
 		final String safeWorkDir = workDir.replace("'", "'\\''");
 
-		cmd = "POSIXLY_CORRECT=1 find -H '" + safeWorkDir + "' -xdev -ls | awk '$4 { s += $3 ~ /^d/ ? $2 : $2 / $4 } END { print int(s / 2) }'";
+		cmd = "POSIXLY_CORRECT=1 find -H '" + safeWorkDir + "' -xdev -ls | awk '$4 == 1 || $3 ~ /^d/ || ! c[$1]++ { s += $2 } END { print int(s / 2) }'";
 		result = exec.executeCommandReality(cmd, "");
 
 		try {
