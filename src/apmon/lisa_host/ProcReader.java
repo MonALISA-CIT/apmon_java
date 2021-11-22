@@ -296,11 +296,15 @@ public class ProcReader {
 					cpuIdle = str;
 				double dcUsr = 0.0, dcSys = 0.0, dcNice = 0.0, dcIdle = 0.0, d = -1.0;
 				try {
-					d = Double.parseDouble(cpuUsr);
+					if (cpuUsr != null)
+						d = Double.parseDouble(cpuUsr);
+					else
+						d = -1.0;
 				}
 				catch (@SuppressWarnings("unused") Exception e) {
 					d = -1.0;
 				}
+
 				if (d >= 0.0)
 					dcUsr = d;
 				try {

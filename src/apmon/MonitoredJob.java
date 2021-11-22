@@ -371,7 +371,7 @@ public class MonitoredJob {
 						}
 					}
 				}
-				catch (@SuppressWarnings("unused") final IOException ioe) {
+				catch (@SuppressWarnings("unused") final IOException | IllegalArgumentException e) {
 					// ignore
 				}
 			}
@@ -415,7 +415,7 @@ public class MonitoredJob {
 			if (f.canRead()) {
 				final String[] listing = f.list();
 				if (listing != null) {
-					open_files = (f.list()).length - 2;
+					open_files = listing.length - 2;
 
 					if (processid == mypid)
 						open_files -= 2;

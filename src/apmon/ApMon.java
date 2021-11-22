@@ -361,13 +361,13 @@ public class ApMon {
 					try {
 						fh = new FileHandler("apmon.log");
 						fh.setFormatter(new SimpleFormatter());
+						logger.addHandler(fh);
 					}
 					catch (Throwable t) {
 						t.printStackTrace();
 					}
 
 					logger.setUseParentHandlers(false);
-					logger.addHandler(fh);
 					logger.setLevel(Level.INFO);
 				}
 				catch (Throwable t) {
