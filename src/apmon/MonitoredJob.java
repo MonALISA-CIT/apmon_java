@@ -111,7 +111,7 @@ public class MonitoredJob {
 
 		if (workDir == null)
 			return null;
-		
+
 		final String safeWorkDir = workDir.replace("'", "'\\''");
 
 		cmd = "POSIXLY_CORRECT=1 find -H '" + safeWorkDir + "' -xdev -ls | awk '$4 == 1 || $3 ~ /^d/ || ! c[$1]++ { s += $2 } END { print int(s / 2) }'";
@@ -255,7 +255,7 @@ public class MonitoredJob {
 	public HashMap<Long, Double> readJobInfo() throws IOException {
 		Vector<Integer> children;
 		HashMap<Long, Double> ret = new HashMap<>();
-		String cmd = null, result = null;
+		String result = null;
 		String line = null;
 
 		int i;
@@ -286,13 +286,15 @@ public class MonitoredJob {
 		logger.fine("Number of children for process " + pid + ": " + children.size());
 
 		/* issue the "ps" command to obtain information on all the descendants */
-		cmd = "ps -p ";
-		for (i = 0; i < children.size() - 1; i++)
-			cmd = cmd + children.elementAt(i) + ",";
-		cmd = cmd + children.elementAt(children.size() - 1);
+		final StringBuilder cmd = new StringBuilder("ps -p ");
+		for (i = 0; i < children.size(); i++) {
+			if (i > 0)
+				cmd.append(',');
+			cmd.append(children.elementAt(i));
+		}
 
-		cmd = cmd + " -o pid,etime,time,%cpu,%mem,rss,vsz,comm";
-		result = exec.executeCommandReality(cmd, "");
+		cmd.append(" -o pid,etime,time,%cpu,%mem,rss,vsz,comm");
+		result = exec.executeCommandReality(cmd.toString(), "");
 
 		// skip over the first line of the `ps` output
 		int idx = result.indexOf('\n');

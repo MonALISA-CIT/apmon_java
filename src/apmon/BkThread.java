@@ -81,7 +81,6 @@ public class BkThread extends Thread {
 	 */
 	public BkThread(ApMon apm) {
 		this.apm = apm;
-		this.monitor = new HostPropertiesMonitor();
 		this.setDaemon(true);
 	}
 
@@ -202,6 +201,9 @@ public class BkThread extends Thread {
 
 	/** Sends an UDP datagram with system monitoring information */
 	void sendSysInfo() {
+		if (monitor == null)
+			return;
+
 		double value = 0.0;
 		Vector<String> paramNames;
 		Vector<Object> paramValues;
@@ -550,6 +552,9 @@ public class BkThread extends Thread {
 		boolean haveChange, haveTimeout;
 		logger.info("[Starting background thread...]");
 
+		if (this.monitor == null)
+			this.monitor = new HostPropertiesMonitor();
+
 		crtTime = System.currentTimeMillis();
 
 		synchronized (apm.mutexBack) {
@@ -583,11 +588,10 @@ public class BkThread extends Thread {
 					nextOp = JOB_INFO_SEND;
 					nextOpTime = nextJobInfoSend;
 				}
-				else
-					if (nextSysInfoSend > 0) {
-						nextOp = SYS_INFO_SEND;
-						nextOpTime = nextSysInfoSend;
-					}
+				else if (nextSysInfoSend > 0) {
+					nextOp = SYS_INFO_SEND;
+					nextOpTime = nextSysInfoSend;
+				}
 			}
 
 			if (nextOpTime == -1)
