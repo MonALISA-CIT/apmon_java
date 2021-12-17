@@ -479,8 +479,8 @@ public class ProcReader {
 			line = parser.nextLine();
 		}
 
-		double dst = Double.valueOf(swapTotal).doubleValue();
-		double dsf = Double.valueOf(swapFree).doubleValue();
+		double dst = Double.parseDouble(swapTotal);
+		double dsf = Double.parseDouble(swapFree);
 		double dsu = dst - dsf;
 
 		swapUsed = "" + dsu;

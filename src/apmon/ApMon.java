@@ -429,9 +429,8 @@ public class ApMon {
 		if (!monJobs.contains(job)) {
 			monJobs.add(job);
 		}
-		else
-			if (logger.isLoggable(Level.WARNING))
-				logger.warning("Job <" + job + "> already exsist.");
+		else if (logger.isLoggable(Level.WARNING))
+			logger.warning("Job <" + job + "> already exsist.");
 	}
 
 	/**
@@ -757,7 +756,7 @@ public class ApMon {
 		String tokens[] = line.split("(\\s)+");
 		String passwd = "";
 
-		if (tokens == null)
+		if (tokens.length == 0)
 			return; // skip blank lines
 
 		line = tokens[0].trim();
@@ -2037,17 +2036,16 @@ public class ApMon {
 					sysMonitorParams &= ~lval;
 				}
 			}
-			else
-				if (param.startsWith("job")) {
-					val = ApMonMonitoringConstants.getJobIdx(param);
-					long lval = val.longValue();
-					if (flag) {
-						jobMonitorParams |= lval;
-					}
-					else {
-						jobMonitorParams &= ~lval;
-					}
+			else if (param.startsWith("job")) {
+				val = ApMonMonitoringConstants.getJobIdx(param);
+				long lval = val.longValue();
+				if (flag) {
+					jobMonitorParams |= lval;
 				}
+				else {
+					jobMonitorParams &= ~lval;
+				}
+			}
 
 			if (val == null) {
 				logger.warning("Invalid parameter name in the configuration file: " + param);

@@ -16,13 +16,12 @@ public class HostPropertiesMonitor {
 		if (System.getProperty("os.name").indexOf("Linux") == -1 && System.getProperty("os.name").indexOf("Mac") == -1) {
 			System.loadLibrary("system");
 		}
-		else
-			if (System.getProperty("os.name").indexOf("Linux") != -1) {
-				reader = new ProcReader();
-			}
-			else {
-				macHostMonitor = new MacHostPropertiesMonitor();
-			}
+		else if (System.getProperty("os.name").indexOf("Linux") != -1) {
+			reader = new ProcReader();
+		}
+		else {
+			macHostMonitor = new MacHostPropertiesMonitor();
+		}
 	}
 
 	/**

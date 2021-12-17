@@ -42,11 +42,14 @@ public class Parser {
 	 */
 	public void parseFromFile(String fileName) {
 		try (BufferedReader reader = new BufferedReader(new FileReader(fileName))) {
-			String str = "";
-			String line = "";
-			while ((line = reader.readLine()) != null)
-				str += line + "\n";
-			st = new StringTokenizer(str);
+			final StringBuilder str = new StringBuilder();
+			String line;
+			while ((line = reader.readLine()) != null) {
+				if (str.length() > 0)
+					str.append('\n');
+				str.append(line);
+			}
+			st = new StringTokenizer(str.toString());
 		}
 		catch (@SuppressWarnings("unused") Throwable t) {
 			st = null;
