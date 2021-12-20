@@ -103,43 +103,6 @@ public class cmdExec {
 	}
 
 	/**
-	 * @param cmd
-	 * @return output
-	 */
-	public BufferedReader exeHomeOutput(String cmd) {
-
-		try {
-
-			pro = Runtime.getRuntime().exec(new String[] { "/bin/sh", "-c", exehome + cmd });
-			// System.out.println("/bin/sh -c "+exehome + cmd);
-			InputStream out = pro.getInputStream();
-			BufferedReader br = new BufferedReader(new InputStreamReader(out));
-
-			try (BufferedReader err = new BufferedReader(new InputStreamReader(pro.getErrorStream()))) {
-				String buffer = "";
-				String ret = "";
-				while ((buffer = err.readLine()) != null) {
-					ret += buffer + "\n'";
-				}
-
-				if (ret.length() != 0) {
-					// System.out.println(ret);
-					return null;
-				}
-			}
-
-			return br;
-
-		}
-		catch (Exception e) {
-			System.out.println("FAILED to execute cmd = " + exehome + cmd + ": " + e.getMessage());
-			Thread.currentThread().interrupt();
-		}
-
-		return null;
-	}
-
-	/**
 	 * stop
 	 */
 	public void stopModule() {
@@ -708,7 +671,7 @@ public class cmdExec {
 		InputStream is;
 		String output = "";
 		boolean stop = false;
-		boolean stopForever = false;
+		volatile boolean stopForever = false;
 		boolean doneReading = false;
 
 		public StreamGobbler(InputStream is) {
@@ -802,7 +765,7 @@ public class cmdExec {
 		String output = "";
 		boolean stop = false;
 		boolean doneReading = false;
-		boolean stopForever = false;
+		volatile boolean stopForever = false;
 
 		public StreamRealGobbler(InputStream is) {
 

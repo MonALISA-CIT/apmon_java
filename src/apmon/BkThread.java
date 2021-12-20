@@ -372,14 +372,11 @@ public class BkThread extends Thread {
 	 * it is disabled.
 	 */
 	void sendGeneralInfo() {
-		Vector<String> paramNames;
-		Vector<Object> paramValues;
-		// , valueTypes;
 		double cpu_MHz, bogomips;
 		int no_CPUs, i;
 
-		paramNames = new Vector<>();
-		paramValues = new Vector<>();
+		final Vector<String> paramNames = new Vector<>();
+		final Vector<Object>paramValues = new Vector<>();
 		// valueTypes = new Vector();
 
 		paramNames.add("hostname");
