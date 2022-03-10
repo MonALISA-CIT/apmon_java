@@ -72,10 +72,9 @@ public class cmdExec {
 			if (osname.startsWith("Linux") || osname.startsWith("Mac")) {
 				pro = Runtime.getRuntime().exec(new String[] { "/bin/sh", "-c", cmd });
 			}
-			else
-				if (osname.startsWith("Windows")) {
-					pro = Runtime.getRuntime().exec(exehome + cmd);
-				}
+			else if (osname.startsWith("Windows")) {
+				pro = Runtime.getRuntime().exec(exehome + cmd);
+			}
 
 			InputStream out = pro.getInputStream();
 			BufferedReader br = new BufferedReader(new InputStreamReader(out));
@@ -137,18 +136,17 @@ public class cmdExec {
 			if (osName.indexOf("Win") != -1) {
 				proc = Runtime.getRuntime().exec(command);
 			}
-			else
-				if (osName.indexOf("Linux") != -1 || osName.indexOf("Mac") != -1) {
-					String[] cmd = new String[3];
-					cmd[0] = "/bin/sh";
-					cmd[1] = "-c";
-					cmd[2] = command;
-					proc = Runtime.getRuntime().exec(cmd);
-				}
-				else {
-					isError = true;
-					return null;
-				}
+			else if (osName.indexOf("Linux") != -1 || osName.indexOf("Mac") != -1) {
+				String[] cmd = new String[3];
+				cmd[0] = "/bin/sh";
+				cmd[1] = "-c";
+				cmd[2] = command;
+				proc = Runtime.getRuntime().exec(cmd);
+			}
+			else {
+				isError = true;
+				return null;
+			}
 
 			error = getStreamGobbler();
 			output = getStreamGobbler();
@@ -252,18 +250,17 @@ public class cmdExec {
 			if (osName.indexOf("Win") != -1) {
 				proc = Runtime.getRuntime().exec(command);
 			}
-			else
-				if (osName.indexOf("Linux") != -1 || osName.indexOf("Mac") != -1) {
-					String[] cmd = new String[3];
-					cmd[0] = "/bin/sh";
-					cmd[1] = "-c";
-					cmd[2] = command;
-					proc = Runtime.getRuntime().exec(cmd);
-				}
-				else {
-					isError = true;
-					return null;
-				}
+			else if (osName.indexOf("Linux") != -1 || osName.indexOf("Mac") != -1) {
+				String[] cmd = new String[3];
+				cmd[0] = "/bin/sh";
+				cmd[1] = "-c";
+				cmd[2] = command;
+				proc = Runtime.getRuntime().exec(cmd);
+			}
+			else {
+				isError = true;
+				return null;
+			}
 
 			error = getStreamGobbler();
 			output = getStreamGobbler();
@@ -377,18 +374,17 @@ public class cmdExec {
 			if (osName.contains("Win")) {
 				proc = Runtime.getRuntime().exec(command);
 			}
-			else
-				if (osName.contains("Linux") || osName.contains("Mac OS X")) {
-					String[] cmd = new String[3];
-					cmd[0] = "/bin/sh";
-					cmd[1] = "-c";
-					cmd[2] = command;
-					proc = Runtime.getRuntime().exec(cmd);
-				}
-				else {
-					isError = true;
-					return null;
-				}
+			else if (osName.contains("Linux") || osName.contains("Mac OS X")) {
+				String[] cmd = new String[3];
+				cmd[0] = "/bin/sh";
+				cmd[1] = "-c";
+				cmd[2] = command;
+				proc = Runtime.getRuntime().exec(cmd);
+			}
+			else {
+				isError = true;
+				return null;
+			}
 
 			error = getStreamRealGobbler();
 			output = getStreamRealGobbler();
@@ -491,18 +487,17 @@ public class cmdExec {
 			if (osName.indexOf("Win") != -1) {
 				proc = Runtime.getRuntime().exec(command);
 			}
-			else
-				if (osName.indexOf("Linux") != -1) {
-					String[] cmd = new String[3];
-					cmd[0] = "/bin/sh";
-					cmd[1] = "-c";
-					cmd[2] = command;
-					proc = Runtime.getRuntime().exec(cmd);
-				}
-				else {
-					isError = true;
-					return null;
-				}
+			else if (osName.indexOf("Linux") != -1) {
+				String[] cmd = new String[3];
+				cmd[0] = "/bin/sh";
+				cmd[1] = "-c";
+				cmd[2] = command;
+				proc = Runtime.getRuntime().exec(cmd);
+			}
+			else {
+				isError = true;
+				return null;
+			}
 
 			error = getStreamRealGobbler();
 			output = getStreamRealGobbler();
@@ -688,7 +683,7 @@ public class cmdExec {
 			stop = false;
 			synchronized (this) {
 				doneReading = false;
-				notify();
+				notifyAll();
 			}
 		}
 
@@ -716,7 +711,7 @@ public class cmdExec {
 		public void stopItForever() {
 			synchronized (this) {
 				stopForever = true;
-				notify();
+				notifyAll();
 			}
 		}
 
@@ -725,10 +720,10 @@ public class cmdExec {
 
 			while (true) {
 
-				synchronized (this) {
-					while (is == null && !stopForever) {
+				while (is == null && !stopForever) {
+					synchronized (this) {
 						try {
-							wait();
+							wait(1000);
 						}
 						catch (@SuppressWarnings("unused") Exception e) {
 							// ignore
@@ -781,7 +776,7 @@ public class cmdExec {
 			stop = false;
 			synchronized (this) {
 				doneReading = false;
-				notify();
+				notifyAll();
 			}
 		}
 
@@ -808,7 +803,7 @@ public class cmdExec {
 		public void stopItForever() {
 			synchronized (this) {
 				stopForever = true;
-				notify();
+				notifyAll();
 			}
 		}
 
@@ -816,11 +811,10 @@ public class cmdExec {
 		public void run() {
 
 			while (true) {
-
-				synchronized (this) {
-					while (is == null && !stopForever) {
+				while (is == null && !stopForever) {
+					synchronized (this) {
 						try {
-							wait();
+							wait(1000);
 						}
 						catch (@SuppressWarnings("unused") Exception e) {
 							// ignore
