@@ -214,20 +214,23 @@ public class cmdExec {
 		}
 		catch (Exception e) {
 			e.printStackTrace();
-
+			isError = true;
+			return "";
+		}
+		finally {
 			if (error != null) {
 				addStreamGobbler(error);
 				error.stopIt();
+				error.stopItForever();
 				error = null;
 			}
 
 			if (output != null) {
 				addStreamGobbler(output);
 				output.stopIt();
+				output.stopItForever();
 				output = null;
 			}
-			isError = true;
-			return "";
 		}
 	}
 
@@ -321,20 +324,23 @@ public class cmdExec {
 		}
 		catch (Exception e) {
 			e.printStackTrace();
-
+			isError = true;
+			return "";
+		}
+		finally {
 			if (error != null) {
 				addStreamGobbler(error);
 				error.stopIt();
+				error.stopItForever();
 				error = null;
 			}
 
 			if (output != null) {
 				addStreamGobbler(output);
 				output.stopIt();
+				output.stopItForever();
 				output = null;
 			}
-			isError = true;
-			return "";
 		}
 	}
 
@@ -452,21 +458,24 @@ public class cmdExec {
 		}
 		catch (Exception e) {
 			e.printStackTrace();
+			isError = true;
 
+			return "";
+		}
+		finally {
 			if (error != null) {
 				addStreamRealGobbler(error);
 				error.stopIt();
+				error.stopItForever();
 				error = null;
 			}
 
 			if (output != null) {
 				addStreamRealGobbler(output);
 				output.stopIt();
+				output.stopItForever();
 				output = null;
 			}
-			isError = true;
-
-			return "";
 		}
 	}
 
@@ -565,21 +574,24 @@ public class cmdExec {
 		}
 		catch (Exception e) {
 			e.printStackTrace();
+			isError = true;
 
+			return "";
+		}
+		finally {
 			if (error != null) {
 				addStreamRealGobbler(error);
 				error.stopIt();
+				error.stopItForever();
 				error = null;
 			}
 
 			if (output != null) {
 				addStreamRealGobbler(output);
 				output.stopIt();
+				output.stopItForever();
 				output = null;
 			}
-			isError = true;
-
-			return "";
 		}
 	}
 
