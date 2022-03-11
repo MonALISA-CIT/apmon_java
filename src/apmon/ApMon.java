@@ -88,7 +88,7 @@ public class ApMon {
 	/**
 	 * ApMon version
 	 */
-	public static final String APMON_VERSION = "2.2.8";
+	public static final String APMON_VERSION = "2.2.9";
 
 	/**
 	 * Max UDP datagram size
