@@ -47,7 +47,7 @@ import apmon.lisa_host.cmdExec;
 /**
  * @author ML team
  */
-public class MonitoredJob {
+public class MonitoredJob implements AutoCloseable {
 	/**
 	 * process id
 	 */
@@ -472,6 +472,12 @@ public class MonitoredJob {
 	@Override
 	public int hashCode() {
 		return 13 * pid + 19 * clusterName.hashCode() + 31 * nodeName.hashCode();
+	}
+
+	@Override
+	public void close() {
+		if (exec != null)
+			exec.close();
 	}
 
 }

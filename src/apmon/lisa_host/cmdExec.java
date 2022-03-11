@@ -9,7 +9,7 @@ import java.util.LinkedList;
 /**
  * @author ML Team
  */
-public class cmdExec {
+public class cmdExec implements AutoCloseable {
 
 	@SuppressWarnings("unused")
 	private String full_cmd;
@@ -72,9 +72,10 @@ public class cmdExec {
 			if (osname.startsWith("Linux") || osname.startsWith("Mac")) {
 				pro = Runtime.getRuntime().exec(new String[] { "/bin/sh", "-c", cmd });
 			}
-			else if (osname.startsWith("Windows")) {
-				pro = Runtime.getRuntime().exec(exehome + cmd);
-			}
+			else
+				if (osname.startsWith("Windows")) {
+					pro = Runtime.getRuntime().exec(exehome + cmd);
+				}
 
 			InputStream out = pro.getInputStream();
 			BufferedReader br = new BufferedReader(new InputStreamReader(out));
@@ -124,6 +125,7 @@ public class cmdExec {
 	 * @param expect
 	 * @return output
 	 */
+	@SuppressWarnings("resource")
 	public String executeCommand(String command, String expect) {
 
 		StreamGobbler output = null;
@@ -136,17 +138,18 @@ public class cmdExec {
 			if (osName.indexOf("Win") != -1) {
 				proc = Runtime.getRuntime().exec(command);
 			}
-			else if (osName.indexOf("Linux") != -1 || osName.indexOf("Mac") != -1) {
-				String[] cmd = new String[3];
-				cmd[0] = "/bin/sh";
-				cmd[1] = "-c";
-				cmd[2] = command;
-				proc = Runtime.getRuntime().exec(cmd);
-			}
-			else {
-				isError = true;
-				return null;
-			}
+			else
+				if (osName.indexOf("Linux") != -1 || osName.indexOf("Mac") != -1) {
+					String[] cmd = new String[3];
+					cmd[0] = "/bin/sh";
+					cmd[1] = "-c";
+					cmd[2] = command;
+					proc = Runtime.getRuntime().exec(cmd);
+				}
+				else {
+					isError = true;
+					return null;
+				}
 
 			error = getStreamGobbler();
 			output = getStreamGobbler();
@@ -204,9 +207,9 @@ public class cmdExec {
 			output.stopIt();
 
 			addStreamGobbler(error);
-			addStreamGobbler(output);
-
 			error = null;
+
+			addStreamGobbler(output);
 			output = null;
 
 			return out;
@@ -219,17 +222,15 @@ public class cmdExec {
 		}
 		finally {
 			if (error != null) {
-				addStreamGobbler(error);
 				error.stopIt();
 				error.stopItForever();
-				error = null;
+				error.interrupt();
 			}
 
 			if (output != null) {
-				addStreamGobbler(output);
 				output.stopIt();
 				output.stopItForever();
-				output = null;
+				output.interrupt();
 			}
 		}
 	}
@@ -240,6 +241,7 @@ public class cmdExec {
 	 * @param howManyTimes
 	 * @return output
 	 */
+	@SuppressWarnings("resource")
 	public String executeCommand(String command, String expect, int howManyTimes) {
 
 		StreamGobbler output = null;
@@ -253,17 +255,18 @@ public class cmdExec {
 			if (osName.indexOf("Win") != -1) {
 				proc = Runtime.getRuntime().exec(command);
 			}
-			else if (osName.indexOf("Linux") != -1 || osName.indexOf("Mac") != -1) {
-				String[] cmd = new String[3];
-				cmd[0] = "/bin/sh";
-				cmd[1] = "-c";
-				cmd[2] = command;
-				proc = Runtime.getRuntime().exec(cmd);
-			}
-			else {
-				isError = true;
-				return null;
-			}
+			else
+				if (osName.indexOf("Linux") != -1 || osName.indexOf("Mac") != -1) {
+					String[] cmd = new String[3];
+					cmd[0] = "/bin/sh";
+					cmd[1] = "-c";
+					cmd[2] = command;
+					proc = Runtime.getRuntime().exec(cmd);
+				}
+				else {
+					isError = true;
+					return null;
+				}
 
 			error = getStreamGobbler();
 			output = getStreamGobbler();
@@ -301,7 +304,10 @@ public class cmdExec {
 					isError = true;
 					break;
 				}
-				Thread.sleep(100);
+
+				synchronized (output) {
+					output.wait(100);
+				}
 			}
 
 			proc.destroy();
@@ -314,9 +320,9 @@ public class cmdExec {
 			output.stopIt();
 
 			addStreamGobbler(error);
-			addStreamGobbler(output);
-
 			error = null;
+
+			addStreamGobbler(output);
 			output = null;
 
 			return out;
@@ -329,17 +335,16 @@ public class cmdExec {
 		}
 		finally {
 			if (error != null) {
-				addStreamGobbler(error);
 				error.stopIt();
 				error.stopItForever();
-				error = null;
+				error.interrupt();
 			}
 
 			if (output != null) {
 				addStreamGobbler(output);
 				output.stopIt();
 				output.stopItForever();
-				output = null;
+				output.interrupt();
 			}
 		}
 	}
@@ -369,6 +374,7 @@ public class cmdExec {
 	 * @param expect
 	 * @return command output
 	 */
+	@SuppressWarnings("resource")
 	public String executeCommandReality(String command, String expect) {
 
 		StreamRealGobbler error = null;
@@ -380,17 +386,18 @@ public class cmdExec {
 			if (osName.contains("Win")) {
 				proc = Runtime.getRuntime().exec(command);
 			}
-			else if (osName.contains("Linux") || osName.contains("Mac OS X")) {
-				String[] cmd = new String[3];
-				cmd[0] = "/bin/sh";
-				cmd[1] = "-c";
-				cmd[2] = command;
-				proc = Runtime.getRuntime().exec(cmd);
-			}
-			else {
-				isError = true;
-				return null;
-			}
+			else
+				if (osName.contains("Linux") || osName.contains("Mac OS X")) {
+					String[] cmd = new String[3];
+					cmd[0] = "/bin/sh";
+					cmd[1] = "-c";
+					cmd[2] = command;
+					proc = Runtime.getRuntime().exec(cmd);
+				}
+				else {
+					isError = true;
+					return null;
+				}
 
 			error = getStreamRealGobbler();
 			output = getStreamRealGobbler();
@@ -400,6 +407,9 @@ public class cmdExec {
 
 			// any output?
 			output.setInputStream(proc.getInputStream());
+
+			// error.setName("StreamRealGobbler - " + command);
+			// output.setName("StreamRealGobbler - " + command);
 
 			String out = "";
 
@@ -428,7 +438,10 @@ public class cmdExec {
 					isError = true;
 					break;
 				}
-				Thread.sleep(100);
+
+				synchronized (output) {
+					output.wait(100);
+				}
 			}
 
 			proc.destroy();
@@ -448,9 +461,9 @@ public class cmdExec {
 			output.stopIt();
 
 			addStreamRealGobbler(error);
-			addStreamRealGobbler(output);
-
 			error = null;
+
+			addStreamRealGobbler(output);
 			output = null;
 
 			return out;
@@ -464,17 +477,15 @@ public class cmdExec {
 		}
 		finally {
 			if (error != null) {
-				addStreamRealGobbler(error);
 				error.stopIt();
 				error.stopItForever();
-				error = null;
+				error.interrupt();
 			}
 
 			if (output != null) {
-				addStreamRealGobbler(output);
 				output.stopIt();
 				output.stopItForever();
-				output = null;
+				output.interrupt();
 			}
 		}
 	}
@@ -485,6 +496,7 @@ public class cmdExec {
 	 * @param howManyTimes
 	 * @return command output
 	 */
+	@SuppressWarnings("resource")
 	public String executeCommandReality(String command, String expect, int howManyTimes) {
 
 		StreamRealGobbler error = null;
@@ -496,17 +508,18 @@ public class cmdExec {
 			if (osName.indexOf("Win") != -1) {
 				proc = Runtime.getRuntime().exec(command);
 			}
-			else if (osName.indexOf("Linux") != -1) {
-				String[] cmd = new String[3];
-				cmd[0] = "/bin/sh";
-				cmd[1] = "-c";
-				cmd[2] = command;
-				proc = Runtime.getRuntime().exec(cmd);
-			}
-			else {
-				isError = true;
-				return null;
-			}
+			else
+				if (osName.indexOf("Linux") != -1) {
+					String[] cmd = new String[3];
+					cmd[0] = "/bin/sh";
+					cmd[1] = "-c";
+					cmd[2] = command;
+					proc = Runtime.getRuntime().exec(cmd);
+				}
+				else {
+					isError = true;
+					return null;
+				}
 
 			error = getStreamRealGobbler();
 			output = getStreamRealGobbler();
@@ -514,6 +527,9 @@ public class cmdExec {
 			error.setInputStream(proc.getErrorStream());
 
 			output.setInputStream(proc.getInputStream());
+
+			// error.setName("StreamRealGobbler - " + command);
+			// output.setName("StreamRealGobbler - " + command);
 
 			String out = "";
 
@@ -564,9 +580,9 @@ public class cmdExec {
 			output.stopIt();
 
 			addStreamRealGobbler(error);
-			addStreamRealGobbler(output);
-
 			error = null;
+
+			addStreamRealGobbler(output);
 			output = null;
 
 			return out;
@@ -580,17 +596,15 @@ public class cmdExec {
 		}
 		finally {
 			if (error != null) {
-				addStreamRealGobbler(error);
 				error.stopIt();
 				error.stopItForever();
-				error = null;
+				error.interrupt();
 			}
 
 			if (output != null) {
-				addStreamRealGobbler(output);
 				output.stopIt();
 				output.stopItForever();
-				output = null;
+				output.interrupt();
 			}
 		}
 	}
@@ -614,7 +628,6 @@ public class cmdExec {
 	 * @param stream
 	 */
 	public void addStreamGobbler(StreamGobbler stream) {
-
 		synchronized (streams) {
 			if (!stopStreams)
 				streams.addLast(stream);
@@ -643,10 +656,12 @@ public class cmdExec {
 	public void addStreamRealGobbler(StreamRealGobbler stream) {
 
 		synchronized (streamsReal) {
-			if (!stopStreamsReal)
+			if (!stopStreamsReal) {
 				streamsReal.addLast(stream);
-			else
+			}
+			else {
 				stream.stopItForever();
+			}
 		}
 	}
 
@@ -674,15 +689,13 @@ public class cmdExec {
 	}
 
 	private static class StreamGobbler extends Thread {
-
 		InputStream is;
 		String output = "";
 		boolean stop = false;
 		volatile boolean stopForever = false;
-		boolean doneReading = false;
+		volatile boolean doneReading = false;
 
 		public StreamGobbler(InputStream is) {
-
 			super("Stream Gobler");
 			this.is = is;
 			this.setDaemon(true);
@@ -755,6 +768,7 @@ public class cmdExec {
 					}
 					synchronized (this) {
 						doneReading = true;
+						notifyAll();
 					}
 					is.close();
 				}
@@ -767,11 +781,10 @@ public class cmdExec {
 	}
 
 	private static class StreamRealGobbler extends Thread {
-
 		InputStream is;
 		String output = "";
 		boolean stop = false;
-		boolean doneReading = false;
+		volatile boolean doneReading = false;
 		volatile boolean stopForever = false;
 
 		public StreamRealGobbler(InputStream is) {
@@ -847,6 +860,7 @@ public class cmdExec {
 					}
 					synchronized (this) {
 						doneReading = true;
+						notifyAll();
 					}
 				}
 				catch (@SuppressWarnings("unused") Exception ioe) {
@@ -857,4 +871,8 @@ public class cmdExec {
 		}
 	}
 
+	@Override
+	public void close() {
+		stopIt();
+	}
 }

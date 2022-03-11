@@ -108,20 +108,24 @@ public class BkThread extends Thread {
 	/**
 	 * 
 	 */
+	@SuppressWarnings("resource")
 	void sendJobInfo() {
-		int i;
-
 		synchronized (apm.mutexBack) {
-
 			if (apm.monJobs.size() == 0) {
-				logger.warning("There are not jobs to be monitored, not sending job monitoring information...");
+				if (logger.isLoggable(Level.FINE))
+					logger.fine("There are no jobs to be monitored, not sending job monitoring information...");
+
 				return;
 			}
-			Date d = new Date();
-			logger.fine("Sending job monitoring information...");
+
+			final Date d = new Date();
+
+			if (logger.isLoggable(Level.FINE))
+				logger.fine("Sending job monitoring information about " + apm.monJobs.size() + " processes");
+
 			apm.lastJobInfoSend = d.getTime();
 
-			for (i = 0; i < apm.monJobs.size(); i++)
+			for (int i = 0; i < apm.monJobs.size(); i++)
 				sendOneJobInfo((apm.monJobs.get(i)));
 		}
 	}
@@ -151,8 +155,8 @@ public class BkThread extends Thread {
 		}
 
 		if (hmJobInfo == null) {
-			logger.warning("Job " + monJob.pid + " does not exist");
-			apm.removeJobToMonitor(monJob.pid);
+			logger.info("Process " + monJob.pid + " is no longer active, cleaning up");
+			apm.removeJobToMonitor(monJob);
 			return;
 		}
 
@@ -376,7 +380,7 @@ public class BkThread extends Thread {
 		int no_CPUs, i;
 
 		final Vector<String> paramNames = new Vector<>();
-		final Vector<Object>paramValues = new Vector<>();
+		final Vector<Object> paramValues = new Vector<>();
 		// valueTypes = new Vector();
 
 		paramNames.add("hostname");
@@ -585,10 +589,11 @@ public class BkThread extends Thread {
 					nextOp = JOB_INFO_SEND;
 					nextOpTime = nextJobInfoSend;
 				}
-				else if (nextSysInfoSend > 0) {
-					nextOp = SYS_INFO_SEND;
-					nextOpTime = nextSysInfoSend;
-				}
+				else
+					if (nextSysInfoSend > 0) {
+						nextOp = SYS_INFO_SEND;
+						nextOpTime = nextSysInfoSend;
+					}
 			}
 
 			if (nextOpTime == -1)
@@ -888,12 +893,14 @@ public class BkThread extends Thread {
 	public static void getNetConfig(Vector<String> netInterfaces, Vector<String> ips) throws IOException, ApMonException {
 		String line;
 		Parser parser = new Parser();
-		cmdExec exec = new cmdExec();
+		String output = null;
 
-		String output = exec.executeCommandReality("/sbin/ifconfig -a", "");
-		if (exec.isError())
-			output = null;
-		exec.stopIt();
+		try (cmdExec exec = new cmdExec()) {
+			output = exec.executeCommandReality("/sbin/ifconfig -a", "");
+
+			if (exec.isError())
+				output = null;
+		}
 
 		String crtIfaceName = null;
 		if (output != null && !output.equals("")) {

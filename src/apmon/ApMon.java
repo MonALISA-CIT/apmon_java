@@ -48,6 +48,7 @@ import java.net.URLConnection;
 import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Hashtable;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.Vector;
@@ -416,7 +417,7 @@ public class ApMon {
 	}
 
 	/**
-	 * Add a job pid to monitorized jobs vector
+	 * Add a job pid to monitored jobs vector
 	 * 
 	 * @param pid
 	 * @param workDir
@@ -424,29 +425,52 @@ public class ApMon {
 	 * @param nodename
 	 */
 	public void addJobToMonitor(final int pid, final String workDir, final String clustername, final String nodename) {
+		@SuppressWarnings("resource")
 		final MonitoredJob job = new MonitoredJob(pid, workDir, clustername, nodename, numCPUs);
 
 		if (!monJobs.contains(job)) {
 			monJobs.add(job);
 		}
-		else if (logger.isLoggable(Level.WARNING))
-			logger.warning("Job <" + job + "> already exsist.");
+		else {
+			if (logger.isLoggable(Level.WARNING))
+				logger.warning("Job <" + job + "> already exists.");
+
+			job.close();
+		}
 	}
 
 	/**
-	 * Remove a pid form monitored jobs vector
+	 * Remove a pid from monitored jobs vector
 	 * 
 	 * @param pid
 	 */
-	public void removeJobToMonitor(int pid) {
-		int i;
-		for (i = 0; i < monJobs.size(); i++) {
-			MonitoredJob job = monJobs.elementAt(i);
+	public void removeJobToMonitor(final int pid) {
+		final Iterator<MonitoredJob> it = monJobs.iterator();
+
+		while (it.hasNext()) {
+			@SuppressWarnings("resource")
+			final MonitoredJob job = it.next();
 			if (job.getPid() == pid) {
-				monJobs.remove(job);
+				it.remove();
+				job.close();
 				break;
 			}
 		}
+	}
+
+	/**
+	 * @param job
+	 * @return <code>true</code> if the job was found and removed
+	 */
+	public boolean removeJobToMonitor(final MonitoredJob job) {
+		if (job != null) {
+			final boolean result = monJobs.remove(job);
+			job.close();
+
+			return result;
+		}
+
+		return false;
 	}
 
 	/**
@@ -862,9 +886,10 @@ public class ApMon {
 
 		/** these should be done only the first time the function is called */
 		if (firstTime) {
-			cmdExec exec = new cmdExec();
-			myHostname = exec.executeCommand("hostname -f", "");
-			exec.stopIt();
+			try (cmdExec exec = new cmdExec()) {
+				myHostname = exec.executeCommand("hostname -f", "");
+			}
+
 			sysNodeName = myHostname;
 
 			dgramSocket = new DatagramSocket();
@@ -1839,6 +1864,18 @@ public class ApMon {
 
 		HostPropertiesMonitor.stopIt();
 		setBackgroundThread(false);
+
+		synchronized (monJobs) {
+			final Iterator<MonitoredJob> it = monJobs.iterator();
+
+			while (it.hasNext()) {
+				@SuppressWarnings("resource")
+				final MonitoredJob job = it.next();
+				job.close();
+				it.remove();
+			}
+		}
+
 	}
 
 	/** Initializes the data structures used to configure the monitoring part of ApMon. */
@@ -2036,16 +2073,17 @@ public class ApMon {
 					sysMonitorParams &= ~lval;
 				}
 			}
-			else if (param.startsWith("job")) {
-				val = ApMonMonitoringConstants.getJobIdx(param);
-				long lval = val.longValue();
-				if (flag) {
-					jobMonitorParams |= lval;
+			else
+				if (param.startsWith("job")) {
+					val = ApMonMonitoringConstants.getJobIdx(param);
+					long lval = val.longValue();
+					if (flag) {
+						jobMonitorParams |= lval;
+					}
+					else {
+						jobMonitorParams &= ~lval;
+					}
 				}
-				else {
-					jobMonitorParams &= ~lval;
-				}
-			}
 
 			if (val == null) {
 				logger.warning("Invalid parameter name in the configuration file: " + param);
