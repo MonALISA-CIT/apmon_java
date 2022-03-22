@@ -1990,11 +1990,13 @@ public class ApMon {
 		jobMonitorParams |= ApMonMonitoringConstants.JOB_RSS;
 		/** opended files by job */
 		jobMonitorParams |= ApMonMonitoringConstants.JOB_OPEN_FILES;
+		/** current percent of the processor used for this job, as reported by contents of /proc/stat */
+		jobMonitorParams |= ApMonMonitoringConstants.JOB_INSTANT_CPU_USAGE;
 	}
 
 	/*******************************************************************************************************************************************************************************
 	 * Parses a "xApMon" line from the configuration file and changes the ApMon settings according to the line.
-	 * 
+	 *
 	 * @param line
 	 */
 	protected void parseXApMonLine(final String line) {

@@ -650,7 +650,15 @@ public final class ApMonMonitoringConstants {
      * Object value of the same SWAP PSS key
      */
     public static final Long LJOB_SWAPPSS 		= Long.valueOf(JOB_SWAPPSS);
-    
+
+    /**
+     *
+     */
+    public static final long JOB_INSTANT_CPU_USAGE      =   0x800000L;
+    /**
+     *
+     */
+    public static final Long LJOB_INSTANT_CPU_USAGE     =   Long.valueOf(JOB_INSTANT_CPU_USAGE);
 
     private static HashMap<String, Long>  HT_JOB_NAMES_TO_CONSTANTS = null;
     private static HashMap<Long, String>  HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES = null;
@@ -661,6 +669,7 @@ public final class ApMonMonitoringConstants {
         HT_JOB_NAMES_TO_CONSTANTS.put("job_run_time",  LJOB_RUN_TIME);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_cpu_time",  LJOB_CPU_TIME);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_cpu_usage", LJOB_CPU_USAGE);
+        HT_JOB_NAMES_TO_CONSTANTS.put("job_instant_cpu_usage", LJOB_INSTANT_CPU_USAGE);
 
         HT_JOB_NAMES_TO_CONSTANTS.put("job_mem_usage", LJOB_MEM_USAGE);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_workdir_size", LJOB_WORKDIR_SIZE);
@@ -679,7 +688,8 @@ public final class ApMonMonitoringConstants {
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_RUN_TIME, "run_time");
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_CPU_TIME, "cpu_time");
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_CPU_USAGE, "cpu_usage");
-        
+        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_INSTANT_CPU_USAGE, "instant_cpu_usage");
+
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_MEM_USAGE, "mem_usage");
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_WORKDIR_SIZE, "workdir_size");
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_DISK_TOTAL, "disk_total");
