@@ -102,11 +102,16 @@ public class MonitoredJob implements AutoCloseable {
 		this.exec = new cmdExec();
 		this.numCPUs = _numCPUs;
 		File f = new File("/proc/stat");
-		if (f.exists() && f.canRead())
+		if (f.exists() && f.canRead()) {
 			this.isLinux = true;
-		else
+			try {
+				this.hertz = Integer.parseInt(exec.executeCommandReality("getconf CLK_TCK", "").replace("\n", ""));
+			} catch (NumberFormatException e) {
+				this.hertz = 100;
+				logger.log(Level.SEVERE, "Could not get CLK_TCK variable from the system. Assigning a default 100 Hz. \n" + e);
+			}
+		} else
 			this.isLinux = false;
-		this.hertz = Integer.parseInt(exec.executeCommandReality("getconf CLK_TCK", "").replace("\n", ""));
 		this.currentProcCPUTime = new HashMap<>();
 		this.totalCPUTime = 0;
 		this.cpuEfficiency = 0;
