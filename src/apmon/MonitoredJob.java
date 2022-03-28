@@ -297,6 +297,11 @@ public class MonitoredJob implements AutoCloseable {
 
 		double elapsedtime = 0.0;
 
+		if (!isLinux) {
+			totalCPUTime = 0.0;
+			cpuEfficiency = 0.0;
+		}
+
 		/*
 		 * this list contains strings of the form "rsz_vsz_command" for every pid; it is used to avoid adding several times processes that have multiple threads and appear in ps as
 		 * separate processes, occupying exactly the same amount of memory and having the same command name. For every line from the output of the ps command we verify if the
