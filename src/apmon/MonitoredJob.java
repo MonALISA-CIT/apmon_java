@@ -36,7 +36,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.StringTokenizer;
 import java.util.Vector;
@@ -71,14 +70,12 @@ public class MonitoredJob implements AutoCloseable {
 
 	final boolean isLinux;
 
-	HashMap<Integer, Double> previousProcCPUTime;
 	HashMap<Integer, Double> currentProcCPUTime;
-	HashMap<Integer, Double> totalProcCPUTime;
 	double totalCPUTime;
-	double previousTotalCPUTime;
-	Timestamp previousMeasureTime;
+	long previousMeasureTime;
 	double cpuEfficiency;
 	double instantCpuEfficiency;
+	int hertz;
 
 	/**
 	 * @param _pid
@@ -109,13 +106,12 @@ public class MonitoredJob implements AutoCloseable {
 			this.isLinux = true;
 		else
 			this.isLinux = false;
-		this.previousProcCPUTime = new HashMap<>();
+		this.hertz = Integer.parseInt(exec.executeCommandReality("getconf CLK_TCK", "").replace("\n", ""));
 		this.currentProcCPUTime = new HashMap<>();
-		this.totalProcCPUTime = new HashMap<>();
 		this.totalCPUTime = 0;
 		this.cpuEfficiency = 0;
 		this.instantCpuEfficiency = 0;
-		this.previousMeasureTime = new Timestamp(System.currentTimeMillis());
+		this.previousMeasureTime = System.currentTimeMillis();
 	}
 
 	/**
@@ -296,9 +292,6 @@ public class MonitoredJob implements AutoCloseable {
 
 		double elapsedtime = 0.0;
 
-		String getHertz = "getconf CLK_TCK";
-		int hertz = Integer.parseInt(exec.executeCommandReality(getHertz, "").replace("\n", ""));
-
 		/*
 		 * this list contains strings of the form "rsz_vsz_command" for every pid; it is used to avoid adding several times processes that have multiple threads and appear in ps as
 		 * separate processes, occupying exactly the same amount of memory and having the same command name. For every line from the output of the ps command we verify if the
@@ -378,7 +371,7 @@ public class MonitoredJob implements AutoCloseable {
 		}
 
 		if (isLinux)
-			getCpuTime(children, elapsedtime, hertz);
+			getCpuTime(children, elapsedtime);
 
 		double pssKB = 0;
 		double swapPssKB = 0;
@@ -443,12 +436,12 @@ public class MonitoredJob implements AutoCloseable {
 		return ret;
 	}
 
-	private void getCpuTime(Vector<Integer> children, double elapsedtime, int hertz) {
-		previousProcCPUTime = (HashMap<Integer, Double>) currentProcCPUTime.clone();
+	private void getCpuTime(Vector<Integer> children, double elapsedtime) {
+		HashMap<Integer, Double> previousProcCPUTime = (HashMap<Integer, Double>) currentProcCPUTime.clone();
 		currentProcCPUTime.clear();
-		previousTotalCPUTime = totalCPUTime;
-		Timestamp currentMeasureTime = new Timestamp(System.currentTimeMillis());
-		for(Integer child: children) {
+		double previousTotalCPUTime = totalCPUTime;
+		long currentMeasureTime = System.currentTimeMillis();
+		for(Integer child : children) {
 			File f = new File("/proc/"+child+"/stat");
 
 			if (f.exists() && f.canRead()) {
@@ -459,10 +452,7 @@ public class MonitoredJob implements AutoCloseable {
 						try {
 							double procCpuTime = Double.parseDouble(splitted[13]) + Double.parseDouble(splitted[14]);
 							currentProcCPUTime.put(child, Double.valueOf(procCpuTime));
-							if (previousProcCPUTime.containsKey(child))
-								totalProcCPUTime.put(child, Double.valueOf(totalProcCPUTime.get(child).doubleValue() + currentProcCPUTime.get(child).doubleValue() - previousProcCPUTime.get(child).doubleValue()));
-							else
-								totalProcCPUTime.put(child, Double.valueOf(procCpuTime));
+							totalCPUTime = totalCPUTime + procCpuTime - previousProcCPUTime.getOrDefault(child,Double.valueOf(0)).doubleValue();
 						} catch (NumberFormatException e) {
 							logger.log(Level.WARNING, "The /proc/" + child + "/stat file did not have the correct formatting. Omitting process accounting.\n" + e);
 						}
@@ -475,18 +465,12 @@ public class MonitoredJob implements AutoCloseable {
 				logger.log(Level.WARNING, "The file /proc/"+child+"/stat does NOT exist");
 			}
 		}
-		totalCPUTime = 0;
-		for (double cputime : totalProcCPUTime.values()) {
-            totalCPUTime += cputime;
-        }
-		instantCpuEfficiency = 100 * (((totalCPUTime - previousTotalCPUTime) / hertz) / ((currentMeasureTime.getTime() - previousMeasureTime.getTime()) / 1000)); //If we want to stay with the current instantaneous efficiency
+		instantCpuEfficiency = 100 * (((totalCPUTime - previousTotalCPUTime) / hertz) / ((currentMeasureTime - previousMeasureTime) / 1000)); //If we want to stay with the current instantaneous efficiency
 		logger.log(Level.INFO, "Instantaneous CPU efficiency = " + String.format("%.2f", Double.valueOf(instantCpuEfficiency)) + " %");
 		cpuEfficiency = 100 * (totalCPUTime / hertz) / (elapsedtime * numCPUs); // If we want to get the average efficiency
 		logger.log(Level.INFO, "Average CPU efficiency = " + String.format("%.2f", Double.valueOf(cpuEfficiency)) + " %");
 		previousMeasureTime = currentMeasureTime;
 	}
-
-
 
 	/**
 	 * count the number of open files for the given pid
