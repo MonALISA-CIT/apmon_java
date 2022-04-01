@@ -195,6 +195,23 @@ public class BkThread extends Thread {
 			}
 		}
 
+		if (monJob.getPayloadMonitoring()) {
+			for (final Map.Entry<String, Double> me : monJob.countStats.entrySet()) {
+				try {
+					final String name = me.getKey();
+					final Object value = me.getValue();
+
+					if (name != null && value != null) {
+						paramNames.add(name);
+						paramValues.add(value);
+					}
+				}
+				catch (Throwable t) {
+					logger.log(Level.WARNING, "", t);
+				}
+			}
+	}
+
 		try {
 			apm.sendParameters(monJob.clusterName, monJob.nodeName, paramNames.size(), paramNames, paramValues);
 		}

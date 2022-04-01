@@ -1992,6 +1992,10 @@ public class ApMon {
 		jobMonitorParams |= ApMonMonitoringConstants.JOB_OPEN_FILES;
 		/** current percent of the processor used for this job, as reported by contents of /proc/stat */
 		jobMonitorParams |= ApMonMonitoringConstants.JOB_INSTANT_CPU_USAGE;
+		/** current total child processes */
+		jobMonitorParams |= ApMonMonitoringConstants.JOB_TOTAL_PROCS;
+		/** current total child threads */
+		jobMonitorParams |= ApMonMonitoringConstants.JOB_TOTAL_THREADS;
 	}
 
 	/*******************************************************************************************************************************************************************************

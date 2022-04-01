@@ -36,6 +36,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.StringTokenizer;
 import java.util.Vector;
@@ -52,6 +53,11 @@ public class MonitoredJob implements AutoCloseable {
 	 * process id
 	 */
 	final int pid;
+
+	/**
+	 * process id of the payload
+	 */
+	int payloadPid;
 
 	/** the job's working directory */
 	final String workDir;
@@ -76,6 +82,10 @@ public class MonitoredJob implements AutoCloseable {
 	double cpuEfficiency;
 	double instantCpuEfficiency;
 	int hertz;
+
+	boolean payloadMonitoring;
+
+	HashMap<String, Double> countStats;
 
 	/**
 	 * @param _pid
@@ -117,6 +127,9 @@ public class MonitoredJob implements AutoCloseable {
 		this.cpuEfficiency = 0;
 		this.instantCpuEfficiency = 0;
 		this.previousMeasureTime = System.currentTimeMillis();
+		this.payloadPid = 0;
+		this.payloadMonitoring = false;
+		this.countStats = new HashMap<>();
 	}
 
 	/**
@@ -184,7 +197,7 @@ public class MonitoredJob implements AutoCloseable {
 	/**
 	 * @return children processes
 	 */
-	public Vector<Integer> getChildren() {
+	public Vector<Integer> getChildren(int targetPid) {
 		Vector<Integer> pids, ppids, children;
 		String cmd = null, result = null;
 		int nProcesses = 0, nChildren = 1;
@@ -208,11 +221,11 @@ public class MonitoredJob implements AutoCloseable {
 		pids = new Vector<>();
 		ppids = new Vector<>();
 		children = new Vector<>();
-		children.add(Integer.valueOf(pid));
+		children.add(Integer.valueOf(targetPid));
 		while (st.hasMoreTokens()) {
 			i = Integer.parseInt(st.nextToken());
 			j = Integer.parseInt(st.nextToken());
-			if (j == pid)
+			if (j == targetPid)
 				pidFound = true;
 			ppids.add(Integer.valueOf(i));
 			pids.add(Integer.valueOf(j));
@@ -310,7 +323,7 @@ public class MonitoredJob implements AutoCloseable {
 		Vector<String> mem_cmd_list = new Vector<>();
 
 		/* get the list of the process' descendants */
-		children = getChildren();
+		children = getChildren(pid);
 
 		if (children == null)
 			return null;
@@ -443,7 +456,85 @@ public class MonitoredJob implements AutoCloseable {
 		ret.put(ApMonMonitoringConstants.LJOB_PSS, Double.valueOf(pssKB));
 		ret.put(ApMonMonitoringConstants.LJOB_SWAPPSS, Double.valueOf(swapPssKB));
 
+		if (payloadMonitoring == true && payloadPid != 0){
+			readJobInfoExtraParams();
+		}
+
 		return ret;
+	}
+
+	public void discoverPayloadPid() {
+		if (payloadMonitoring == true && payloadPid == 0) {
+			String cmd = "pgrep -P " + pid + " -f payload";
+			String result = exec.executeCommandReality(cmd, "");
+			if (!result.isEmpty()) {
+				payloadPid = Integer.parseInt(result.replace("\n", ""));
+				logger.log(Level.INFO, "PID of payload has been set to " + payloadPid);
+			}
+		}
+	}
+
+	/**
+	 * @return job monitoring for thread and proc counts
+	 * @throws IOException
+	 */
+	public void readJobInfoExtraParams() throws IOException {
+		HashMap<String, Double> processStatus = new HashMap<>();
+		HashMap<String, Double> threadStatus = new HashMap<>();
+		int thread_count = 0;
+
+		/* get the list of the process' descendants */
+		Vector<Integer> children = getChildren(payloadPid);
+
+		for (Integer child : children) {
+			registerStatus(processStatus, "/proc/" + child + "/status");
+
+			ArrayList<Integer> threads = new ArrayList<>();
+			File threadsDir = new File("/proc/" + child + "/task");
+			File[] threadIds = threadsDir.listFiles();
+			if(threadIds != null) {
+				for (File threadId : threadIds) {
+					if (threadId.isDirectory()) {
+						try {
+							threads.add(Integer.valueOf(threadId.getName()));
+						} catch (NumberFormatException e) {
+							logger.log(Level.WARNING, "Some of the /proc/" + child + "/task directory names did not have the correct formatting. \n" + e);
+						}
+					}
+				}
+			}
+			for (Integer thread : threads) {
+				registerStatus(threadStatus, "/proc/" + child + "/task/" + thread + "/status");
+				}
+			thread_count = thread_count + threads.size();
+		}
+
+		countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_TOTAL_PROCS), Double.valueOf(children.size()));
+		countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_TOTAL_THREADS), Double.valueOf(thread_count));
+		for (String status : threadStatus.keySet())
+			countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.JOB_TOTAL_THREADS) + "_" + status, threadStatus.get(status));
+		for (String status : processStatus.keySet())
+			countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.JOB_TOTAL_PROCS) + "_" + status, processStatus.get(status));
+	}
+
+	private static void registerStatus(HashMap<String, Double> statusRegistry, String filename){
+		File f = new File(filename);
+		if (f.exists() && f.canRead()) {
+			try (BufferedReader br = new BufferedReader(new FileReader(f))) {
+				String s = br.readLine();
+				s = br.readLine();
+				if ((s = br.readLine()) != null) {
+					String status = s.split("\\s+")[1];
+					if (status.length() == 1) {
+						int statusCount = statusRegistry.getOrDefault(status, Double.valueOf(0)).intValue() + 1;
+						statusRegistry.put(status, Double.valueOf(statusCount));
+					}
+				}
+			}
+			catch (IOException | IllegalArgumentException e) {
+				logger.log(Level.WARNING, "The file filename does NOT exist or has incorrect formatting.\n" + e);
+			}
+		}
 	}
 
 	private void getCpuTime(Vector<Integer> children, double elapsedtime) {
@@ -561,4 +652,13 @@ public class MonitoredJob implements AutoCloseable {
 			exec.close();
 	}
 
+
+	public void setPayloadMonitoring() {
+		payloadMonitoring = true;
+		logger.log(Level.INFO, "Payload monitoring has been activated");
+	}
+
+	public boolean getPayloadMonitoring() {
+		return payloadMonitoring;
+	}
 }
