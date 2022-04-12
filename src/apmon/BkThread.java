@@ -136,7 +136,7 @@ public class BkThread extends Thread {
 	 * 
 	 * @param monJob
 	 */
-	private void sendOneJobInfo(final MonitoredJob monJob) {
+	public void sendOneJobInfo(final MonitoredJob monJob) {
 		final Vector<String> paramNames = new Vector<>();
 		final Vector<Object> paramValues = new Vector<>();
 		// , valueTypes;
@@ -194,8 +194,7 @@ public class BkThread extends Thread {
 				}
 			}
 		}
-
-		if (monJob.getPayloadMonitoring()) {
+		if (monJob.countStats != null) {
 			for (final Map.Entry<String, Double> me : monJob.countStats.entrySet()) {
 				try {
 					final String name = me.getKey();
@@ -207,10 +206,10 @@ public class BkThread extends Thread {
 					}
 				}
 				catch (Throwable t) {
-					logger.log(Level.WARNING, "", t);
+					logger.log(Level.WARNING, "Error parsing number of threads and processes", t);
 				}
 			}
-	}
+		}
 
 		try {
 			apm.sendParameters(monJob.clusterName, monJob.nodeName, paramNames.size(), paramNames, paramValues);

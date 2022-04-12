@@ -678,39 +678,61 @@ public final class ApMonMonitoringConstants {
      **/
      public static final Long LJOB_TOTAL_THREADS = Long.valueOf(JOB_TOTAL_THREADS);
 
+     /**
+     *
+     **/
+     public static final long JOB_TOTAL_CONTEXTSW = 0x8000000L;
+    /**
+     *
+     **/
+     public static final Long LJOB_TOTAL_CONTEXTSW = Long.valueOf(JOB_TOTAL_CONTEXTSW);
+
+     /**
+     *
+     **/
+     public static final long JOB_RATE_CONTEXTSW = 0x10000000L;
+    /**
+     *
+     **/
+     public static final Long LJOB_RATE_CONTEXTSW = Long.valueOf(JOB_RATE_CONTEXTSW);
+
     private static HashMap<String, Long>  HT_JOB_NAMES_TO_CONSTANTS = null;
     private static HashMap<Long, String>  HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES = null;
-    
+
     static {
         HT_JOB_NAMES_TO_CONSTANTS = new HashMap<>();
-        
+
         HT_JOB_NAMES_TO_CONSTANTS.put("job_run_time",  LJOB_RUN_TIME);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_cpu_time",  LJOB_CPU_TIME);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_cpu_usage", LJOB_CPU_USAGE);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_instant_cpu_usage", LJOB_INSTANT_CPU_USAGE);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_total_processes", LJOB_TOTAL_PROCS);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_total_threads", LJOB_TOTAL_THREADS);
+        HT_JOB_NAMES_TO_CONSTANTS.put("job_contextswitching_total", LJOB_TOTAL_CONTEXTSW);
+        HT_JOB_NAMES_TO_CONSTANTS.put("job_contextswitching_rate", LJOB_RATE_CONTEXTSW);
 
         HT_JOB_NAMES_TO_CONSTANTS.put("job_mem_usage", LJOB_MEM_USAGE);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_workdir_size", LJOB_WORKDIR_SIZE);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_disk_total", LJOB_DISK_TOTAL);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_disk_used", LJOB_DISK_USED);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_disk_free", LJOB_DISK_FREE);
-        
+
         HT_JOB_NAMES_TO_CONSTANTS.put("job_disk_usage", LJOB_DISK_USAGE);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_virtualmem", LJOB_VIRTUALMEM);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_rss", LJOB_RSS);
 		HT_JOB_NAMES_TO_CONSTANTS.put("job_open_files", LJOB_OPEN_FILES);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_pss", LJOB_PSS);
 		HT_JOB_NAMES_TO_CONSTANTS.put("job_swappss", LJOB_SWAPPSS);
-        
+
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES = new HashMap<>();
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_RUN_TIME, "run_time");
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_CPU_TIME, "cpu_time");
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_CPU_USAGE, "cpu_usage");
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_INSTANT_CPU_USAGE, "instant_cpu_usage");
-        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_TOTAL_PROCS, "processes_total");
-        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_TOTAL_THREADS, "threads_total");
+        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_TOTAL_PROCS, "processes");
+        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_TOTAL_THREADS, "threads");
+        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_RATE_CONTEXTSW, "CS_rate");
+        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_TOTAL_CONTEXTSW, "CS_total");
 
 
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_MEM_USAGE, "mem_usage");

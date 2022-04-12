@@ -435,8 +435,19 @@ public class ApMon {
 			if (logger.isLoggable(Level.WARNING))
 				logger.warning("Job <" + job + "> already exists.");
 
-			job.close();
+	/**
+	 * Add a MonitoredJob instance to monitorized jobs vector
+	 *
+	 * @param monJob
+	 */
+	public MonitoredJob addJobInstanceToMonitor(MonitoredJob job) {
+		if (!monJobs.contains(job)) {
+			monJobs.add(job);
 		}
+		else
+			if (logger.isLoggable(Level.WARNING))
+				logger.warning("Job <" + job + "> already exsist.");
+		return job;
 	}
 
 	/**
@@ -1815,6 +1826,17 @@ public class ApMon {
 		}
 	}
 
+	/**
+	 * Gets background threads.
+	 *
+	 * @return bkThread
+	 */
+	public BkThread getBackgroundThread() {
+		if (bkThread == null)
+			bkThread = new BkThread(this);
+		return bkThread;
+	}
+
 	private static final String levels_s[] = { "FATAL", "WARNING", "INFO", "FINE", "FINER", "FINEST", "DEBUG", "ALL", "OFF", "CONFIG" };
 
 	private static final Level levels[] = { Level.SEVERE, Level.WARNING, Level.INFO, Level.FINE, Level.FINER, Level.FINEST, Level.FINEST, Level.ALL, Level.OFF, Level.CONFIG };
@@ -1996,6 +2018,10 @@ public class ApMon {
 		jobMonitorParams |= ApMonMonitoringConstants.JOB_TOTAL_PROCS;
 		/** current total child threads */
 		jobMonitorParams |= ApMonMonitoringConstants.JOB_TOTAL_THREADS;
+		/** current total context switches */
+		jobMonitorParams |= ApMonMonitoringConstants.JOB_TOTAL_CONTEXTSW;
+		/** current rate context switches */
+		jobMonitorParams |= ApMonMonitoringConstants.JOB_RATE_CONTEXTSW;
 	}
 
 	/*******************************************************************************************************************************************************************************
