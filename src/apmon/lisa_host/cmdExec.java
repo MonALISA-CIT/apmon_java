@@ -3,7 +3,6 @@ package apmon.lisa_host;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.Date;
 import java.util.LinkedList;
 
 /**
@@ -108,7 +107,7 @@ public class cmdExec implements AutoCloseable {
 	public void stopModule() {
 
 		if (this.pro != null)
-			this.pro.destroy();
+			this.pro.destroyForcibly();
 
 	}
 
@@ -163,11 +162,11 @@ public class cmdExec implements AutoCloseable {
 			String out = "";
 
 			// any error???
-			long startTime = new Date().getTime();
+			final long startTime = System.currentTimeMillis();
 			while (true) {
 				out = error.getOutput();
 				try {
-					if (!out.equals("") && proc.exitValue() != 0) {
+					if (!out.isEmpty() && proc.exitValue() != 0) {
 						isError = true;
 						break;
 					}
@@ -182,7 +181,7 @@ public class cmdExec implements AutoCloseable {
 						break;
 					}
 				}
-				long endTime = new Date().getTime();
+				final long endTime = System.currentTimeMillis();
 				if (endTime - startTime > timeout) {
 					isError = true;
 					break;
@@ -190,10 +189,10 @@ public class cmdExec implements AutoCloseable {
 				Thread.sleep(100);
 			}
 
-			proc.destroy();
+			proc.destroyForcibly();
 			proc.waitFor();
 
-			if (out.equals(""))
+			if (out.isEmpty())
 				out = output.getOutput();
 
 			// String ret = "";
@@ -277,11 +276,11 @@ public class cmdExec implements AutoCloseable {
 
 			String out = "";
 
-			long startTime = new Date().getTime();
+			final long startTime = System.currentTimeMillis();
 			while (true) {
 				out = error.getOutput();
 				try {
-					if (!out.equals("") && proc.exitValue() != 0) {
+					if (!out.isEmpty() && proc.exitValue() != 0) {
 						isError = true;
 						break;
 					}
@@ -299,7 +298,7 @@ public class cmdExec implements AutoCloseable {
 						}
 					}
 				}
-				long endTime = new Date().getTime();
+				final long endTime = System.currentTimeMillis();
 				if (endTime - startTime > timeout) {
 					isError = true;
 					break;
@@ -310,10 +309,10 @@ public class cmdExec implements AutoCloseable {
 				}
 			}
 
-			proc.destroy();
+			proc.destroyForcibly();
 			proc.waitFor();
 
-			if (out.equals(""))
+			if (out.isEmpty())
 				out = output.getOutput();
 
 			error.stopIt();
@@ -414,11 +413,11 @@ public class cmdExec implements AutoCloseable {
 			String out = "";
 
 			// any error???
-			long startTime = new Date().getTime();
+			final long startTime = System.currentTimeMillis();
 			while (true) {
 				out = error.forceAllOutput();
 				try {
-					if (!out.equals("") && proc.exitValue() != 0) {
+					if (!out.isEmpty() && proc.exitValue() != 0) {
 						isError = true;
 						break;
 					}
@@ -433,7 +432,7 @@ public class cmdExec implements AutoCloseable {
 						break;
 					}
 				}
-				long endTime = new Date().getTime();
+				final long endTime = System.currentTimeMillis();
 				if (endTime - startTime > timeout) {
 					isError = true;
 					break;
@@ -444,10 +443,10 @@ public class cmdExec implements AutoCloseable {
 				}
 			}
 
-			proc.destroy();
+			proc.destroyForcibly();
 			proc.waitFor();
 
-			if (out.equals(""))
+			if (out.isEmpty())
 				out = output.forceAllOutput();
 
 			// String ret = "";
@@ -533,11 +532,11 @@ public class cmdExec implements AutoCloseable {
 
 			String out = "";
 
-			long startTime = new Date().getTime();
+			final long startTime = System.currentTimeMillis();
 			while (true) {
 				out = error.forceAllOutput();
 				try {
-					if (!out.equals("") && proc.exitValue() != 0) {
+					if (!out.isEmpty() && proc.exitValue() != 0) {
 						isError = true;
 						break;
 					}
@@ -555,7 +554,7 @@ public class cmdExec implements AutoCloseable {
 						}
 					}
 				}
-				long endTime = new Date().getTime();
+				final long endTime = System.currentTimeMillis();
 				if (endTime - startTime > timeout) {
 					isError = true;
 					break;
@@ -563,10 +562,10 @@ public class cmdExec implements AutoCloseable {
 				Thread.sleep(100);
 			}
 
-			proc.destroy();
+			proc.destroyForcibly();
 			proc.waitFor();
 
-			if (out.equals(""))
+			if (out.isEmpty())
 				out = output.forceAllOutput();
 
 			// String ret = "";
