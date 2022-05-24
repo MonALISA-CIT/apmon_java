@@ -681,16 +681,25 @@ public final class ApMonMonitoringConstants {
      /**
      *
      **/
-     public static final long JOB_TOTAL_CONTEXTSW = 0x8000000L;
+     public static final long JOB_TOTAL_VOLUNTARY_CONTEXTSW = 0x8000000L;
     /**
      *
      **/
-     public static final Long LJOB_TOTAL_CONTEXTSW = Long.valueOf(JOB_TOTAL_CONTEXTSW);
+     public static final Long LJOB_TOTAL_VOLUNTARY_CONTEXTSW = Long.valueOf(JOB_TOTAL_VOLUNTARY_CONTEXTSW);
 
      /**
      *
      **/
-     public static final long JOB_RATE_CONTEXTSW = 0x10000000L;
+     public static final long JOB_TOTAL_NONVOLUNTARY_CONTEXTSW = 0x10000000L;
+    /**
+     *
+     **/
+     public static final Long LJOB_TOTAL_NONVOLUNTARY_CONTEXTSW = Long.valueOf(JOB_TOTAL_NONVOLUNTARY_CONTEXTSW);
+
+     /**
+     *
+     **/
+     public static final long JOB_RATE_CONTEXTSW = 0x20000000L;
     /**
      *
      **/
@@ -708,7 +717,8 @@ public final class ApMonMonitoringConstants {
         HT_JOB_NAMES_TO_CONSTANTS.put("job_instant_cpu_usage", LJOB_INSTANT_CPU_USAGE);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_total_processes", LJOB_TOTAL_PROCS);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_total_threads", LJOB_TOTAL_THREADS);
-        HT_JOB_NAMES_TO_CONSTANTS.put("job_contextswitching_total", LJOB_TOTAL_CONTEXTSW);
+        HT_JOB_NAMES_TO_CONSTANTS.put("job_contextswitchingvol_total", LJOB_TOTAL_VOLUNTARY_CONTEXTSW);
+        HT_JOB_NAMES_TO_CONSTANTS.put("job_contextswitchingnonvol_total", LJOB_TOTAL_NONVOLUNTARY_CONTEXTSW);
         HT_JOB_NAMES_TO_CONSTANTS.put("job_contextswitching_rate", LJOB_RATE_CONTEXTSW);
 
         HT_JOB_NAMES_TO_CONSTANTS.put("job_mem_usage", LJOB_MEM_USAGE);
@@ -732,8 +742,8 @@ public final class ApMonMonitoringConstants {
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_TOTAL_PROCS, "processes");
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_TOTAL_THREADS, "threads");
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_RATE_CONTEXTSW, "CS_rate");
-        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_TOTAL_CONTEXTSW, "CS_total");
-
+        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_TOTAL_VOLUNTARY_CONTEXTSW, "CS_voluntary");
+        HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_TOTAL_NONVOLUNTARY_CONTEXTSW, "CS_nonvoluntary");
 
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_MEM_USAGE, "mem_usage");
         HT_JOB_CONSTANTS_TO_ML_PARAM_NAMES.put(LJOB_WORKDIR_SIZE, "workdir_size");

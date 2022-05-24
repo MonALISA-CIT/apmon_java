@@ -98,6 +98,13 @@ public class MonitoredJob implements AutoCloseable {
 	int hertz;
 
 	boolean payloadMonitoring;
+
+	final HashMap<String, Double> commandVoluntaryCS;
+	final HashMap<String, Double> commandNonvoluntaryCS;
+	final HashMap<Integer, String> procCommands;
+	final HashMap<String, Double> currentCommandCPUTime;
+	final HashMap<String, Double> instantCommandCPUEfficiency;
+
 	/**
 	 * @param _pid
 	 * @param _workDir
@@ -139,6 +146,11 @@ public class MonitoredJob implements AutoCloseable {
 		this.previousMeasureTime = System.currentTimeMillis();
 		this.payloadMonitoring = false;
 		this.countStats = new HashMap<>();
+		this.commandVoluntaryCS = new HashMap<>();
+		this.commandNonvoluntaryCS = new HashMap<>();
+		this.procCommands = new HashMap<>();
+		this.currentCommandCPUTime = new HashMap<>();
+		this.instantCommandCPUEfficiency = new HashMap<>();
 	}
 
 	/**
@@ -204,9 +216,10 @@ public class MonitoredJob implements AutoCloseable {
 	}
 
 	/**
+	 * @param targetPid
 	 * @return children processes
 	 */
-	public Vector<Integer> getChildren(int targetPid) {
+	private Vector<Integer> getChildren(int targetPid) {
 		Vector<Integer> pids, ppids, children = null;
 		String cmd = null, result = null;
 		int nProcesses = 0, nChildren = 1;
@@ -407,7 +420,7 @@ public class MonitoredJob implements AutoCloseable {
 		}
 
 		if (isLinux)
-			getCpuTime(children, elapsedtime, previousTotalCPUTime);
+			getCpuEfficiency(children, elapsedtime, previousTotalCPUTime);
 		else {
 			if ((totalCPUTime - previousTotalCPUTime) > 0)
 				instantCpuEfficiency =  100000 * (totalCPUTime - previousTotalCPUTime) / (currentMeasureTime - previousMeasureTime);
@@ -455,8 +468,8 @@ public class MonitoredJob implements AutoCloseable {
 		}
 
 		ret.put(ApMonMonitoringConstants.LJOB_RUN_TIME, Double.valueOf(elapsedtime * numCPUs));
-		if(isLinux)
-			ret.put(ApMonMonitoringConstants.LJOB_CPU_TIME, Double.valueOf(totalCPUTime/hertz));
+		if (isLinux)
+			ret.put(ApMonMonitoringConstants.LJOB_CPU_TIME, Double.valueOf(totalCPUTime / hertz));
 		else
 			ret.put(ApMonMonitoringConstants.LJOB_CPU_TIME, Double.valueOf(totalCPUTime));
 		ret.put(ApMonMonitoringConstants.LJOB_CPU_USAGE, Double.valueOf(cpuEfficiency));
@@ -521,38 +534,51 @@ public class MonitoredJob implements AutoCloseable {
 			for (Integer child : children) {
 				cs = registerStatusAndCountCSwitch(processStatus, "/proc/" + child + "/status");
 				if (cs.containsKey("voluntary")) {
-					totalVoluntaryContextSwitches = totalVoluntaryContextSwitches + cs.get("voluntary").doubleValue() - previousVoluntaryCS.getOrDefault(child.toString(),Double.valueOf(0)).doubleValue();
+					totalVoluntaryContextSwitches = totalVoluntaryContextSwitches + cs.get("voluntary").doubleValue()
+							- previousVoluntaryCS.getOrDefault(child.toString(), Double.valueOf(0)).doubleValue();
 					voluntaryCS.put(child.toString(), cs.get("voluntary"));
 				}
 				if (cs.containsKey("nonvoluntary")) {
-					totalNonVoluntaryContextSwitches = totalNonVoluntaryContextSwitches + cs.get("nonvoluntary").doubleValue() - previousNonVoluntaryCS.getOrDefault(child.toString(),Double.valueOf(0)).doubleValue();
+					totalNonVoluntaryContextSwitches = totalNonVoluntaryContextSwitches
+							+ cs.get("nonvoluntary").doubleValue()
+							- previousNonVoluntaryCS.getOrDefault(child.toString(), Double.valueOf(0)).doubleValue();
 					nonvoluntaryCS.put(child.toString(), cs.get("nonvoluntary"));
 				}
 
 				ArrayList<Integer> threads = new ArrayList<>();
 				File threadsDir = new File("/proc/" + child + "/task");
 				File[] threadIds = threadsDir.listFiles();
-				if(threadIds != null) {
+				if (threadIds != null) {
 					for (File threadId : threadIds) {
 						if (threadId.isDirectory()) {
 							try {
 								threads.add(Integer.valueOf(threadId.getName()));
 							} catch (NumberFormatException e) {
-								logger.log(Level.WARNING, "Some of the /proc/" + child + "/task directory names did not have the correct formatting. \n" + e);
+								logger.log(Level.WARNING, "Some of the /proc/" + child
+										+ "/task directory names did not have the correct formatting. \n" + e);
 							}
 						}
 					}
 				}
 				for (Integer thread : threads) {
 					if (thread != child) {
-						cs = registerStatusAndCountCSwitch(threadStatus, "/proc/" + child + "/task/" + thread + "/status");
+						cs = registerStatusAndCountCSwitch(threadStatus,
+								"/proc/" + child + "/task/" + thread + "/status");
 
 						if (cs.containsKey("voluntary")) {
-							totalVoluntaryContextSwitches = totalVoluntaryContextSwitches + cs.get("voluntary").doubleValue() - previousVoluntaryCS.getOrDefault(child.toString() + "-" + thread.toString(),Double.valueOf(0)).doubleValue();
+							totalVoluntaryContextSwitches = totalVoluntaryContextSwitches
+									+ cs.get("voluntary").doubleValue()
+									- previousVoluntaryCS
+											.getOrDefault(child.toString() + "-" + thread.toString(), Double.valueOf(0))
+											.doubleValue();
 							voluntaryCS.put(child.toString() + "-" + thread.toString(), cs.get("voluntary"));
 						}
 						if (cs.containsKey("nonvoluntary")) {
-							totalNonVoluntaryContextSwitches = totalNonVoluntaryContextSwitches + cs.get("nonvoluntary").doubleValue() - previousNonVoluntaryCS.getOrDefault(child.toString() + "-" + thread.toString(),Double.valueOf(0)).doubleValue();
+							totalNonVoluntaryContextSwitches = totalNonVoluntaryContextSwitches
+									+ cs.get("nonvoluntary").doubleValue()
+									- previousNonVoluntaryCS
+											.getOrDefault(child.toString() + "-" + thread.toString(), Double.valueOf(0))
+											.doubleValue();
 							nonvoluntaryCS.put(child.toString() + "-" + thread.toString(), cs.get("nonvoluntary"));
 						}
 					}
@@ -560,36 +586,88 @@ public class MonitoredJob implements AutoCloseable {
 				thread_count = thread_count + threads.size();
 			}
 
-			double contextSwitchingRate = 1000 * ((totalVoluntaryContextSwitches + totalNonVoluntaryContextSwitches) - (previousVoluntaryTotalContextSwitches + previousNonVoluntaryTotalContextSwitches))  / (currentMeasureTime - previousMeasureTime);
+			long timeDiff = currentMeasureTime - previousMeasureTime;
+			double voluntaryContextSwitchingRate = 1000
+					* (totalVoluntaryContextSwitches - previousVoluntaryTotalContextSwitches) / timeDiff;
+			double nonVoluntaryContextSwitchingRate = 1000
+					* (totalNonVoluntaryContextSwitches - previousNonVoluntaryTotalContextSwitches) / timeDiff;
 
-			countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_TOTAL_PROCS), Double.valueOf(children.size()));
-			countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_TOTAL_THREADS), Double.valueOf(thread_count));
+			countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_TOTAL_PROCS),
+					Double.valueOf(children.size()));
+			countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_TOTAL_THREADS),
+					Double.valueOf(thread_count));
 			for (String status : threadStatus.keySet())
-				countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.JOB_TOTAL_THREADS) + "_" + status, threadStatus.get(status));
+				countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.JOB_TOTAL_THREADS)
+						+ "_" + status, threadStatus.get(status));
 			for (String status : processStatus.keySet())
-				countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.JOB_TOTAL_PROCS) + "_" + status, processStatus.get(status));
-			countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_RATE_CONTEXTSW), Double.valueOf(contextSwitchingRate));
-			countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_TOTAL_CONTEXTSW), Double.valueOf(totalVoluntaryContextSwitches + totalNonVoluntaryContextSwitches));
-
+				countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.JOB_TOTAL_PROCS)
+						+ "_" + status, processStatus.get(status));
+			for (String command : commandVoluntaryCS.keySet())
+				countStats.put(
+						ApMonMonitoringConstants.getJobMLParamName(
+								ApMonMonitoringConstants.LJOB_TOTAL_VOLUNTARY_CONTEXTSW) + "_" + command,
+						commandVoluntaryCS.get(command));
+			for (String command : commandNonvoluntaryCS.keySet())
+				countStats.put(
+						ApMonMonitoringConstants.getJobMLParamName(
+								ApMonMonitoringConstants.LJOB_TOTAL_NONVOLUNTARY_CONTEXTSW) + "_" + command,
+						commandNonvoluntaryCS.get(command));
+			for (String command : instantCommandCPUEfficiency.keySet())
+				countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_CPU_USAGE) + "_"
+						+ command, instantCommandCPUEfficiency.get(command));
+			countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_RATE_CONTEXTSW)
+					+ "_voluntary", Double.valueOf(voluntaryContextSwitchingRate));
+			countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_RATE_CONTEXTSW)
+					+ "_nonvoluntary", Double.valueOf(nonVoluntaryContextSwitchingRate));
+			countStats.put(
+					ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_TOTAL_VOLUNTARY_CONTEXTSW)
+							+ "_total",
+					Double.valueOf(totalVoluntaryContextSwitches));
+			countStats.put(
+					ApMonMonitoringConstants
+							.getJobMLParamName(ApMonMonitoringConstants.LJOB_TOTAL_NONVOLUNTARY_CONTEXTSW) + "_total",
+					Double.valueOf(totalNonVoluntaryContextSwitches));
 		} else
 			logger.log(Level.INFO, "The job has no children");
 	}
 
+
+
+	private void checkRegisteredCommand(Integer procPid) {
+		if (!procCommands.containsKey(procPid)) {
+			File f = new File("/proc/" + procPid + "/cmdline");
+			if (f.exists() && f.canRead()) {
+				String s;
+				try (BufferedReader br = new BufferedReader(new FileReader(f))) {
+					if ((s = br.readLine()) != null) {
+						s = s.split("\u0000")[0];
+						if (s.contains("/cvmfs"))
+							s = s.substring(s.lastIndexOf('/') + 1);
+						procCommands.put(procPid, s);
+					}
+				} catch (IOException | IllegalArgumentException e) {
+					logger.log(Level.WARNING, "The file /proc/" + pid + "/cmdline could not be accessed.\n" + e);
+				}
+			}
+		}
+	}
+
 	/*
 	 * @param statusRegistry registry of number of processes per status
+	 *
 	 * @param filename where to grep the contents
 	 *
 	 * @return Amount of voluntary and non-voluntary observed Context Switches
 	 */
-	private static HashMap<String, Double> registerStatusAndCountCSwitch(HashMap<String, Double> statusRegistry, String filename){
+	private static HashMap<String, Double> registerStatusAndCountCSwitch(HashMap<String, Double> statusRegistry,
+			String filename) {
 		File f = new File(filename);
 		String s;
 		HashMap<String, Double> contextSwitches = new HashMap<>();
 
 		if (f.exists() && f.canRead()) {
 			try (BufferedReader br = new BufferedReader(new FileReader(f))) {
-				while ((s = br.readLine()) != null)
-			    {
+				while ((s = br.readLine()) != null) {
 					if (s.startsWith("State")) {
 						String status = s.split("\\s+")[1];
 						if (status.length() == 1) {
@@ -600,20 +678,24 @@ public class MonitoredJob implements AutoCloseable {
 					try {
 						if (s.startsWith("voluntary_ctxt_switches")) {
 							double cs = Double.parseDouble(s.split("\\s+")[1]);
-							contextSwitches.put("voluntary", Double.valueOf(contextSwitches.getOrDefault("voluntary", Double.valueOf(0)).doubleValue() + cs));
+							contextSwitches.put("voluntary", Double.valueOf(
+									contextSwitches.getOrDefault("voluntary", Double.valueOf(0)).doubleValue() + cs));
 						}
 						if (s.startsWith("nonvoluntary_ctxt_switches")) {
 							double cs = Double.parseDouble(s.split("\\s+")[1]);
-							contextSwitches.put("nonvoluntary", Double.valueOf(contextSwitches.getOrDefault("nonvoluntary", Double.valueOf(0)).doubleValue() + cs));
+							contextSwitches.put("nonvoluntary", Double.valueOf(
+									contextSwitches.getOrDefault("nonvoluntary", Double.valueOf(0)).doubleValue()
+											+ cs));
 						}
 					} catch (NumberFormatException e) {
-						logger.log(Level.WARNING,  "The file " + filename + " does not have the correct formatting. \n" + e);
+						logger.log(Level.WARNING,
+								"The file " + filename + " does not have the correct formatting. \n" + e);
 					}
-			    }
+				}
 
-			}
-			catch (IOException | IllegalArgumentException e) {
-				logger.log(Level.WARNING, "The file " + filename + " does NOT exist or has incorrect formatting.\n" + e);
+			} catch (IOException | IllegalArgumentException e) {
+				logger.log(Level.WARNING,
+						"The file " + filename + " does NOT exist or has incorrect formatting.\n" + e);
 			}
 		}
 		return contextSwitches;
@@ -623,43 +705,75 @@ public class MonitoredJob implements AutoCloseable {
 	 * Computes instantaneous and average CPU efficiencies
 	 *
 	 * @param children
+	 *
 	 * @param elapsedtime of the long-lived process
+	 *
 	 * @param previousTotalCPUTime
 	 */
-	private void getCpuTime(Vector<Integer> children, double elapsedtime, double previousTotalCPUTime) {
+	private void getCpuEfficiency(Vector<Integer> children, double elapsedtime, double previousTotalCPUTime) {
 		long currentMeasureTime = System.currentTimeMillis();
 		HashMap<Integer, Double> previousProcCPUTime = (HashMap<Integer, Double>) currentProcCPUTime.clone();
 		currentProcCPUTime.clear();
-		for(Integer child : children) {
-			File f = new File("/proc/"+child+"/stat");
+		String filename;
+		for (Integer child : children) {
+			filename = "/proc/" + child + "/stat";
+			File f = new File(filename);
+			double procCpuTime = 0;
 
 			if (f.exists() && f.canRead()) {
-				try (BufferedReader br = new BufferedReader(new FileReader(f))){
+				try (BufferedReader br = new BufferedReader(new FileReader(f))) {
 					String s;
-					while ( (s=br.readLine())!=null ) {
+					while ((s = br.readLine()) != null) {
 						String[] splitted = s.split(" ");
 						try {
 							if (splitted.length >= 15) {
-								double procCpuTime = Double.parseDouble(splitted[13]) + Double.parseDouble(splitted[14]);
+								procCpuTime = Double.parseDouble(splitted[13]) + Double.parseDouble(splitted[14]);
 								currentProcCPUTime.put(child, Double.valueOf(procCpuTime));
-								totalCPUTime = totalCPUTime + procCpuTime - previousProcCPUTime.getOrDefault(child,Double.valueOf(0)).doubleValue();
+								totalCPUTime = totalCPUTime + procCpuTime
+										- previousProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue();
 							}
 						} catch (NumberFormatException e) {
-							logger.log(Level.WARNING, "The /proc/" + child + "/stat file did not have the correct formatting. Omitting process accounting.\n" + e);
+							logger.log(Level.WARNING, "The " + filename
+									+ " file did not have the correct formatting. Omitting process accounting.\n" + e);
 						}
 					}
 
 				} catch (IOException | IllegalArgumentException e) {
-					logger.log(Level.WARNING, "The file /proc/" + child + "/stat output could not be accessed. The process might have already died.\n" + e);
+					logger.log(Level.WARNING, "The file " + filename
+							+ " output could not be accessed. The process might have already died.\n" + e);
 				}
 			} else {
-				logger.log(Level.WARNING, "The file /proc/"+child+"/stat does NOT exist");
+				logger.log(Level.WARNING, "The file " + filename + " does NOT exist");
 			}
 		}
-		instantCpuEfficiency = 100 * (((totalCPUTime - previousTotalCPUTime) / hertz) / ((currentMeasureTime - previousMeasureTime) / 1000)); //If we want to stay with the current instantaneous efficiency
-		logger.log(Level.INFO, "Instantaneous CPU efficiency = " + String.format("%.2f", Double.valueOf(instantCpuEfficiency)) + " %");
-		cpuEfficiency = 100 * (totalCPUTime / hertz) / (elapsedtime * numCPUs); // If we want to get the average efficiency
-		logger.log(Level.INFO, "Average CPU efficiency = " + String.format("%.2f", Double.valueOf(cpuEfficiency)) + " %");
+
+		long timeDiff = currentMeasureTime - previousMeasureTime;
+		registerConsumedCPUPerCommand(previousProcCPUTime, timeDiff);
+
+		instantCpuEfficiency = 100000 * (((totalCPUTime - previousTotalCPUTime) / hertz) / timeDiff); // Current instantaneous efficiency
+		if (instantCpuEfficiency > 1000) {
+			logger.log(Level.WARNING, "Instantaneous CPU efficiency = "
+					+ String.format("%.2f", Double.valueOf(instantCpuEfficiency)) + " %.");
+		}
+		cpuEfficiency = 100 * (totalCPUTime / hertz) / (elapsedtime * numCPUs); // If we want to get the average
+																				// efficiency
+		// logger.log(Level.INFO, "Average CPU efficiency = " + String.format("%.2f", Double.valueOf(cpuEfficiency)) + " %");
+	}
+
+	private void registerConsumedCPUPerCommand(HashMap<Integer, Double> previousProcCPUTime, long timeDiff) {
+		String command;
+		currentCommandCPUTime.clear();
+		for (Integer pidProc : currentProcCPUTime.keySet()) {
+			checkRegisteredCommand(pidProc);
+			command = procCommands.get(pidProc);
+			if (command != null) {
+				currentCommandCPUTime.put(command, currentProcCPUTime.get(pidProc));
+				instantCommandCPUEfficiency.put(command,
+						Double.valueOf(100000 * ((currentProcCPUTime.get(pidProc).doubleValue()
+								- previousProcCPUTime.getOrDefault(pidProc, Double.valueOf(0)).doubleValue()) / hertz)
+								/ timeDiff));
+			}
+		}
 	}
 
 	/**

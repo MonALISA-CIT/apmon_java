@@ -1827,14 +1827,92 @@ public class ApMon {
 	}
 
 	/**
-	 * Gets background threads.
+	 * Sends an UDP datagram with job monitoring information. Works only in Linux system; on other systems it takes no
+	 * action.
 	 *
-	 * @return bkThread
+	 * @param monJob
 	 */
-	public BkThread getBackgroundThread() {
-		if (bkThread == null)
-			bkThread = new BkThread(this);
-		return bkThread;
+	public void sendOneJobInfo(final MonitoredJob monJob) {
+		final Vector<String> paramNames = new Vector<>();
+		final Vector<Object> paramValues = new Vector<>();
+		// , valueTypes;
+
+		final long crtTime = System.currentTimeMillis();
+
+		lastJobInfoSend = crtTime;
+
+		HashMap<Long, Double> hmJobInfo = null;
+
+		try {
+			hmJobInfo = monJob.readJobInfo();
+		}
+		catch (IOException e) {
+			logger.log(Level.WARNING, "Unable to read job info for " + monJob.getPid(), e);
+		}
+
+		if (hmJobInfo == null) {
+			logger.info("Process " + monJob.pid + " is no longer active, cleaning up");
+			removeJobToMonitor(monJob.pid);
+			return;
+		}
+
+		HashMap<Long, Double> hmJobDisk = null;
+
+		try {
+			hmJobDisk = monJob.readJobDiskUsage();
+		}
+		catch (Throwable t1) {
+			logger.warning("Unable to read job Disk Usage info for " + monJob.getPid() + " : " + t1 + " (" + t1.getMessage() + ")");
+		}
+
+		// hmJobInfo != null FOR SURE!
+		final HashMap<Long, Double> hm = hmJobInfo;
+
+		if (hmJobDisk != null) {
+			hm.putAll(hmJobDisk);
+		}
+
+		for (final Map.Entry<Long, Double> me : hm.entrySet()) {
+			try {
+				final String name = ApMonMonitoringConstants.getJobMLParamName(me.getKey());
+				final Object value = me.getValue();
+
+				if (name != null && value != null) {
+					paramNames.add(name);
+					paramValues.add(value);
+				}
+			}
+			catch (Throwable t) {
+				logger.log(Level.WARNING, "", t);
+				if (autoDisableMonitoring) {
+					logger.warning("parameter " + ApMonMonitoringConstants.getJobName(me.getKey()) + " disabled");
+					sysMonitorParams &= ~me.getKey().longValue();
+				}
+			}
+		}
+		if (monJob.countStats != null) {
+			for (final Map.Entry<String, Double> me : monJob.countStats.entrySet()) {
+				try {
+					final String name = me.getKey();
+					final Object value = me.getValue();
+
+					if (name != null && value != null) {
+						paramNames.add(name);
+						paramValues.add(value);
+					}
+				}
+				catch (Throwable t) {
+					logger.log(Level.WARNING, "Error parsing number of threads and processes", t);
+				}
+			}
+		}
+
+		try {
+			sendParameters(monJob.clusterName, monJob.nodeName, paramNames.size(), paramNames, paramValues);
+		}
+		catch (Exception e) {
+			logger.warning("Error while sending system information: " + e);
+		}
 	}
 
 	private static final String levels_s[] = { "FATAL", "WARNING", "INFO", "FINE", "FINER", "FINEST", "DEBUG", "ALL", "OFF", "CONFIG" };
@@ -2018,8 +2096,10 @@ public class ApMon {
 		jobMonitorParams |= ApMonMonitoringConstants.JOB_TOTAL_PROCS;
 		/** current total child threads */
 		jobMonitorParams |= ApMonMonitoringConstants.JOB_TOTAL_THREADS;
-		/** current total context switches */
-		jobMonitorParams |= ApMonMonitoringConstants.JOB_TOTAL_CONTEXTSW;
+		/** current total voluntary context switches */
+		jobMonitorParams |= ApMonMonitoringConstants.JOB_TOTAL_VOLUNTARY_CONTEXTSW;
+		/** current total non voluntary context switches */
+		jobMonitorParams |= ApMonMonitoringConstants.JOB_TOTAL_NONVOLUNTARY_CONTEXTSW;
 		/** current rate context switches */
 		jobMonitorParams |= ApMonMonitoringConstants.JOB_RATE_CONTEXTSW;
 	}
