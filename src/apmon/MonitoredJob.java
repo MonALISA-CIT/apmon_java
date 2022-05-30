@@ -16,12 +16,12 @@
  * incorporation of new features - is done on a best effort basis. All bug
  * fixes and enhancements will be made available under the same terms and
  * conditions as the original software,
- * 
+ *
  * IN NO EVENT SHALL THE AUTHORS OR DISTRIBUTORS BE LIABLE TO ANY PARTY FOR
  * DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES ARISING OUT
  * OF THE USE OF THIS SOFTWARE, ITS DOCUMENTATION, OR ANY DERIVATIVES THEREOF,
  * EVEN IF THE AUTHORS HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
+ *
  * THE AUTHORS AND DISTRIBUTORS SPECIFICALLY DISCLAIM ANY WARRANTIES,
  * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. THIS SOFTWARE IS
@@ -532,17 +532,26 @@ public class MonitoredJob implements AutoCloseable {
 		HashMap<String, Double> cs;
 		if (children != null) {
 			for (Integer child : children) {
+				checkRegisteredCommand(child);
 				cs = registerStatusAndCountCSwitch(processStatus, "/proc/" + child + "/status");
 				if (cs.containsKey("voluntary")) {
-					totalVoluntaryContextSwitches = totalVoluntaryContextSwitches + cs.get("voluntary").doubleValue()
+					double newCS = cs.get("voluntary").doubleValue()
 							- previousVoluntaryCS.getOrDefault(child.toString(), Double.valueOf(0)).doubleValue();
+					totalVoluntaryContextSwitches = totalVoluntaryContextSwitches + newCS;
 					voluntaryCS.put(child.toString(), cs.get("voluntary"));
+
+					String command = procCommands.get(child);
+					if (command != null)
+						commandVoluntaryCS.put(command,  Double.valueOf(commandVoluntaryCS.getOrDefault(command, Double.valueOf(0)).doubleValue() + newCS));
 				}
 				if (cs.containsKey("nonvoluntary")) {
-					totalNonVoluntaryContextSwitches = totalNonVoluntaryContextSwitches
-							+ cs.get("nonvoluntary").doubleValue()
+					double newCS = cs.get("nonvoluntary").doubleValue()
 							- previousNonVoluntaryCS.getOrDefault(child.toString(), Double.valueOf(0)).doubleValue();
+					totalNonVoluntaryContextSwitches = totalNonVoluntaryContextSwitches + newCS;
 					nonvoluntaryCS.put(child.toString(), cs.get("nonvoluntary"));
+					String command = procCommands.get(child);
+					if (command != null)
+						commandNonvoluntaryCS.put(command,  Double.valueOf(commandNonvoluntaryCS.getOrDefault(command, Double.valueOf(0)).doubleValue() + newCS));
 				}
 
 				ArrayList<Integer> threads = new ArrayList<>();
@@ -562,24 +571,31 @@ public class MonitoredJob implements AutoCloseable {
 				}
 				for (Integer thread : threads) {
 					if (thread != child) {
+						checkRegisteredCommand(thread);
 						cs = registerStatusAndCountCSwitch(threadStatus,
 								"/proc/" + child + "/task/" + thread + "/status");
 
 						if (cs.containsKey("voluntary")) {
-							totalVoluntaryContextSwitches = totalVoluntaryContextSwitches
-									+ cs.get("voluntary").doubleValue()
-									- previousVoluntaryCS
-											.getOrDefault(child.toString() + "-" + thread.toString(), Double.valueOf(0))
-											.doubleValue();
+							double newCS = cs.get("voluntary").doubleValue()
+							- previousVoluntaryCS
+									.getOrDefault(child.toString() + "-" + thread.toString(), Double.valueOf(0))
+									.doubleValue();
+							totalVoluntaryContextSwitches = totalVoluntaryContextSwitches + newCS;
 							voluntaryCS.put(child.toString() + "-" + thread.toString(), cs.get("voluntary"));
+							String command = procCommands.get(thread);
+							if (command != null)
+								commandVoluntaryCS.put(command,  Double.valueOf(commandVoluntaryCS.getOrDefault(command, Double.valueOf(0)).doubleValue() + newCS));
 						}
 						if (cs.containsKey("nonvoluntary")) {
-							totalNonVoluntaryContextSwitches = totalNonVoluntaryContextSwitches
-									+ cs.get("nonvoluntary").doubleValue()
+							double newCS = cs.get("nonvoluntary").doubleValue()
 									- previousNonVoluntaryCS
-											.getOrDefault(child.toString() + "-" + thread.toString(), Double.valueOf(0))
-											.doubleValue();
+									.getOrDefault(child.toString() + "-" + thread.toString(), Double.valueOf(0))
+									.doubleValue();
+							totalNonVoluntaryContextSwitches = totalNonVoluntaryContextSwitches + newCS;
 							nonvoluntaryCS.put(child.toString() + "-" + thread.toString(), cs.get("nonvoluntary"));
+							String command = procCommands.get(thread);
+							if (command != null)
+								commandNonvoluntaryCS.put(command,  Double.valueOf(commandNonvoluntaryCS.getOrDefault(command, Double.valueOf(0)).doubleValue() + newCS));
 						}
 					}
 				}
@@ -823,7 +839,7 @@ public class MonitoredJob implements AutoCloseable {
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see java.lang.Object#equals(java.lang.Object)
 	 */
 	@Override
@@ -841,7 +857,7 @@ public class MonitoredJob implements AutoCloseable {
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see java.lang.Object#hashCode()
 	 */
 	@Override
