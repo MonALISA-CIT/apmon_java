@@ -435,8 +435,19 @@ public class ApMon {
 			if (logger.isLoggable(Level.WARNING))
 				logger.warning("Job <" + job + "> already exists.");
 
-			job.close();
+	/**
+	 * Add a MonitoredJob instance to monitorized jobs vector
+	 *
+	 * @param monJob
+	 */
+	public MonitoredJob addJobInstanceToMonitor(MonitoredJob job) {
+		if (!monJobs.contains(job)) {
+			monJobs.add(job);
 		}
+		else
+			if (logger.isLoggable(Level.WARNING))
+				logger.warning("Job <" + job + "> already exsist.");
+		return job;
 	}
 
 	/**
@@ -1815,6 +1826,95 @@ public class ApMon {
 		}
 	}
 
+	/**
+	 * Sends an UDP datagram with job monitoring information. Works only in Linux system; on other systems it takes no
+	 * action.
+	 *
+	 * @param monJob
+	 */
+	public void sendOneJobInfo(final MonitoredJob monJob) {
+		final Vector<String> paramNames = new Vector<>();
+		final Vector<Object> paramValues = new Vector<>();
+		// , valueTypes;
+
+		final long crtTime = System.currentTimeMillis();
+
+		lastJobInfoSend = crtTime;
+
+		HashMap<Long, Double> hmJobInfo = null;
+
+		try {
+			hmJobInfo = monJob.readJobInfo();
+		}
+		catch (IOException e) {
+			logger.log(Level.WARNING, "Unable to read job info for " + monJob.getPid(), e);
+		}
+
+		if (hmJobInfo == null) {
+			logger.info("Process " + monJob.pid + " is no longer active, cleaning up");
+			removeJobToMonitor(monJob.pid);
+			return;
+		}
+
+		HashMap<Long, Double> hmJobDisk = null;
+
+		try {
+			hmJobDisk = monJob.readJobDiskUsage();
+		}
+		catch (Throwable t1) {
+			logger.warning("Unable to read job Disk Usage info for " + monJob.getPid() + " : " + t1 + " (" + t1.getMessage() + ")");
+		}
+
+		// hmJobInfo != null FOR SURE!
+		final HashMap<Long, Double> hm = hmJobInfo;
+
+		if (hmJobDisk != null) {
+			hm.putAll(hmJobDisk);
+		}
+
+		for (final Map.Entry<Long, Double> me : hm.entrySet()) {
+			try {
+				final String name = ApMonMonitoringConstants.getJobMLParamName(me.getKey());
+				final Object value = me.getValue();
+
+				if (name != null && value != null) {
+					paramNames.add(name);
+					paramValues.add(value);
+				}
+			}
+			catch (Throwable t) {
+				logger.log(Level.WARNING, "", t);
+				if (autoDisableMonitoring) {
+					logger.warning("parameter " + ApMonMonitoringConstants.getJobName(me.getKey()) + " disabled");
+					sysMonitorParams &= ~me.getKey().longValue();
+				}
+			}
+		}
+		if (monJob.countStats != null) {
+			for (final Map.Entry<String, Double> me : monJob.countStats.entrySet()) {
+				try {
+					final String name = me.getKey();
+					final Object value = me.getValue();
+
+					if (name != null && value != null) {
+						paramNames.add(name);
+						paramValues.add(value);
+					}
+				}
+				catch (Throwable t) {
+					logger.log(Level.WARNING, "Error parsing number of threads and processes", t);
+				}
+			}
+		}
+
+		try {
+			sendParameters(monJob.clusterName, monJob.nodeName, paramNames.size(), paramNames, paramValues);
+		}
+		catch (Exception e) {
+			logger.warning("Error while sending system information: " + e);
+		}
+	}
+
 	private static final String levels_s[] = { "FATAL", "WARNING", "INFO", "FINE", "FINER", "FINEST", "DEBUG", "ALL", "OFF", "CONFIG" };
 
 	private static final Level levels[] = { Level.SEVERE, Level.WARNING, Level.INFO, Level.FINE, Level.FINER, Level.FINEST, Level.FINEST, Level.ALL, Level.OFF, Level.CONFIG };
@@ -1990,11 +2090,23 @@ public class ApMon {
 		jobMonitorParams |= ApMonMonitoringConstants.JOB_RSS;
 		/** opended files by job */
 		jobMonitorParams |= ApMonMonitoringConstants.JOB_OPEN_FILES;
+		/** current percent of the processor used for this job, as reported by contents of /proc/stat */
+		jobMonitorParams |= ApMonMonitoringConstants.JOB_INSTANT_CPU_USAGE;
+		/** current total child processes */
+		jobMonitorParams |= ApMonMonitoringConstants.JOB_TOTAL_PROCS;
+		/** current total child threads */
+		jobMonitorParams |= ApMonMonitoringConstants.JOB_TOTAL_THREADS;
+		/** current total voluntary context switches */
+		jobMonitorParams |= ApMonMonitoringConstants.JOB_TOTAL_VOLUNTARY_CONTEXTSW;
+		/** current total non voluntary context switches */
+		jobMonitorParams |= ApMonMonitoringConstants.JOB_TOTAL_NONVOLUNTARY_CONTEXTSW;
+		/** current rate context switches */
+		jobMonitorParams |= ApMonMonitoringConstants.JOB_RATE_CONTEXTSW;
 	}
 
 	/*******************************************************************************************************************************************************************************
 	 * Parses a "xApMon" line from the configuration file and changes the ApMon settings according to the line.
-	 * 
+	 *
 	 * @param line
 	 */
 	protected void parseXApMonLine(final String line) {
