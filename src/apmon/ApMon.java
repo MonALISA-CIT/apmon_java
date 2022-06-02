@@ -435,10 +435,15 @@ public class ApMon {
 			if (logger.isLoggable(Level.WARNING))
 				logger.warning("Job <" + job + "> already exists.");
 
+			job.close();
+		}
+	}
+
 	/**
 	 * Add a MonitoredJob instance to monitorized jobs vector
 	 *
-	 * @param monJob
+	 * @param job
+	 * @return the monitored job wrapper
 	 */
 	public MonitoredJob addJobInstanceToMonitor(MonitoredJob job) {
 		if (!monJobs.contains(job)) {
@@ -1837,9 +1842,7 @@ public class ApMon {
 		final Vector<Object> paramValues = new Vector<>();
 		// , valueTypes;
 
-		final long crtTime = System.currentTimeMillis();
-
-		lastJobInfoSend = crtTime;
+		lastJobInfoSend = System.currentTimeMillis();
 
 		HashMap<Long, Double> hmJobInfo = null;
 
