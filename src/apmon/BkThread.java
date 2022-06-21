@@ -38,10 +38,13 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Hashtable;
+import java.util.List;
 import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.Vector;
@@ -674,56 +677,47 @@ public class BkThread extends Thread {
 		if (osName.indexOf("Linux") < 0)
 			return null;
 
-		Hashtable<Long, String> info = new Hashtable<>();
+		final Hashtable<Long, String> info = new Hashtable<>(6);
 
-		try (BufferedReader in = new BufferedReader(new FileReader("/proc/cpuinfo"))) {
-			String line = null;
-			while ((line = in.readLine()) != null) {
-				StringTokenizer st = new StringTokenizer(line, ":");
-				if (line.startsWith("cpu MHz")) {
-					st.nextToken();
-					String freq_s = st.nextToken();
-					if (freq_s == null)
-						throw new ApMonException("Error reading CPU frequency from /proc/cpuinfo");
-					info.put(ApMonMonitoringConstants.LGEN_CPU_MHZ, freq_s);
-				}
-				if (line.startsWith("vendor_id")) {
-					st.nextToken();
-					String vendor = st.nextToken();
-					if (vendor == null)
-						throw new ApMonException("Error reading CPU vendor_id from /proc/cpuinfo");
-					info.put(ApMonMonitoringConstants.LGEN_CPU_VENDOR_ID, vendor);
-				}
-				if (line.startsWith("model") && !line.startsWith("model name")) {
-					st.nextToken();
-					String model = st.nextToken();
-					if (model == null)
-						throw new ApMonException("Error reading CPU model from /proc/cpuinfo");
-					info.put(ApMonMonitoringConstants.LGEN_CPU_MODEL, model);
-				}
-				if (line.startsWith("cpu family")) {
-					st.nextToken();
-					String cpufam = st.nextToken();
-					if (cpufam == null)
-						throw new ApMonException("Error reading CPU family from /proc/cpuinfo");
-					info.put(ApMonMonitoringConstants.LGEN_CPU_FAMILY, cpufam);
-				}
-				if (line.startsWith("model name")) {
-					st.nextToken();
-					String modelname = st.nextToken();
-					if (modelname == null)
-						throw new ApMonException("Error reading CPU model name from /proc/cpuinfo");
-					info.put(ApMonMonitoringConstants.LGEN_CPU_MODEL_NAME, modelname);
-				}
-				if (line.startsWith("bogomips")) {
-					st.nextToken();
-					String bogomips = st.nextToken();
-					if (bogomips == null)
-						throw new ApMonException("Error reading CPU bogomips from /proc/cpuinfo");
-					info.put(ApMonMonitoringConstants.LGEN_BOGOMIPS, bogomips);
-				}
+		final List<String> lines = Files.readAllLines(Paths.get("/proc/cpuinfo"));
+
+		for (final String line : lines) {
+			final int idx = line.indexOf(':');
+
+			if (idx <= 0)
+				continue;
+
+			final String key = line.substring(0, idx).trim();
+			final String value = line.substring(idx + 1).trim();
+
+			switch (key) {
+				case "cpu MHz":
+					info.put(ApMonMonitoringConstants.LGEN_CPU_MHZ, value);
+					break;
+				case "vendor_id":
+					info.put(ApMonMonitoringConstants.LGEN_CPU_VENDOR_ID, value);
+					break;
+				case "model":
+					info.put(ApMonMonitoringConstants.LGEN_CPU_MODEL, value);
+					break;
+				case "cpu family":
+					info.put(ApMonMonitoringConstants.LGEN_CPU_FAMILY, value);
+					break;
+				case "model name":
+					info.put(ApMonMonitoringConstants.LGEN_CPU_MODEL_NAME, value);
+					break;
+				case "bogomips":
+					info.put(ApMonMonitoringConstants.LGEN_BOGOMIPS, value);
+					break;
+				default:
+					// ignore other keys
 			}
+
+			// after the first CPU found the map is filled
+			if (info.size() == 6)
+				break;
 		}
+
 		return info;
 	}
 
@@ -861,7 +855,5 @@ public class BkThread extends Thread {
 				line = parser.nextLine();
 			}
 		}
-
 	}
-
 }
