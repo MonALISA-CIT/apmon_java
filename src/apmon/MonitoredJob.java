@@ -106,6 +106,11 @@ public class MonitoredJob implements AutoCloseable {
 	final HashMap<String, Double> instantCommandCPUEfficiency;
 
 	/**
+	 * Synchronize updates
+	 */
+	protected static final Object requestSync = new Object();
+
+	/**
 	 * @param _pid
 	 * @param _workDir
 	 * @param _clusterName
@@ -320,8 +325,6 @@ public class MonitoredJob implements AutoCloseable {
 		HashMap<Long, Double> ret = new HashMap<>();
 		String result = null;
 		String line = null;
-		double previousTotalCPUTime = totalCPUTime;
-		long currentMeasureTime = System.currentTimeMillis();
 
 		int i;
 
@@ -377,123 +380,128 @@ public class MonitoredJob implements AutoCloseable {
 		if (idx > 0)
 			result = result.substring(idx + 1);
 
-		StringTokenizer rst = new StringTokenizer(result, "\n");
-		while (rst.hasMoreTokens()) {
-			line = rst.nextToken();
-			try {
-				StringTokenizer st = new StringTokenizer(line, " \t");
 
-				apid = Long.parseLong(st.nextToken());
-				_etime = parsePSTime(st.nextToken());
-				if (pid == apid)
-					elapsedtime = _etime;
+		synchronized (requestSync) {
+			double previousTotalCPUTime = totalCPUTime;
+			long currentMeasureTime = System.currentTimeMillis();
+			StringTokenizer rst = new StringTokenizer(result, "\n");
+			while (rst.hasMoreTokens()) {
+				line = rst.nextToken();
+				try {
+					StringTokenizer st = new StringTokenizer(line, " \t");
 
-				if (!isLinux) {
-					_cputime = parsePSTime(st.nextToken());
-					totalCPUTime += _cputime;
-					_pcpu = Double.parseDouble(st.nextToken());
-					cpuEfficiency += _pcpu;
+					apid = Long.parseLong(st.nextToken());
+					_etime = parsePSTime(st.nextToken());
+					if (pid == apid)
+						elapsedtime = _etime;
+
+					if (!isLinux) {
+						_cputime = parsePSTime(st.nextToken());
+						totalCPUTime += _cputime;
+						_pcpu = Double.parseDouble(st.nextToken());
+						cpuEfficiency += _pcpu;
+					}
+					_pmem = Double.parseDouble(st.nextToken());
+					_rsz = Double.parseDouble(st.nextToken());
+					_vsz = Double.parseDouble(st.nextToken());
+					String cmdName = st.nextToken();
+
+					etime = etime > _etime ? etime : _etime;
+
+					String mem_cmd_s = "" + _rsz + "_" + _vsz + "_" + cmdName;
+					// mem_cmd_list.add(mem_cmd_s);
+					if (mem_cmd_list.indexOf(mem_cmd_s) == -1) {
+						pmem += _pmem;
+						vsz += _vsz;
+						rsz += _rsz;
+						mem_cmd_list.add(mem_cmd_s);
+						long _fd = countOpenFD(apid);
+						if (_fd != -1)
+							fd += _fd;
+					}
 				}
-				_pmem = Double.parseDouble(st.nextToken());
-				_rsz = Double.parseDouble(st.nextToken());
-				_vsz = Double.parseDouble(st.nextToken());
-				String cmdName = st.nextToken();
-
-				etime = etime > _etime ? etime : _etime;
-
-				String mem_cmd_s = "" + _rsz + "_" + _vsz + "_" + cmdName;
-				// mem_cmd_list.add(mem_cmd_s);
-				if (mem_cmd_list.indexOf(mem_cmd_s) == -1) {
-					pmem += _pmem;
-					vsz += _vsz;
-					rsz += _rsz;
-					mem_cmd_list.add(mem_cmd_s);
-					long _fd = countOpenFD(apid);
-					if (_fd != -1)
-						fd += _fd;
+				catch (final Exception e) {
+					System.err.println("Exception parsing line `" + line + "` of the output of `" + cmd + "`: " + e.getMessage());
+					e.printStackTrace();
 				}
 			}
-			catch (final Exception e) {
-				System.err.println("Exception parsing line `" + line + "` of the output of `" + cmd + "`: " + e.getMessage());
-				e.printStackTrace();
+
+			if (isLinux)
+				getCpuEfficiency(children, elapsedtime, previousTotalCPUTime);
+			else {
+				if ((totalCPUTime - previousTotalCPUTime) > 0)
+					instantCpuEfficiency =  100000 * (totalCPUTime - previousTotalCPUTime) / (currentMeasureTime - previousMeasureTime);
+				else
+					instantCpuEfficiency = 0;
 			}
-		}
 
-		if (isLinux)
-			getCpuEfficiency(children, elapsedtime, previousTotalCPUTime);
-		else {
-			if ((totalCPUTime - previousTotalCPUTime) > 0)
-				instantCpuEfficiency =  100000 * (totalCPUTime - previousTotalCPUTime) / (currentMeasureTime - previousMeasureTime);
-			else
-				instantCpuEfficiency = 0;
-		}
+			double pssKB = 0;
+			double swapPssKB = 0;
+			for (Integer child : children) {
+				File f = new File("/proc/" + child + "/smaps");
 
-		double pssKB = 0;
-		double swapPssKB = 0;
-		for (Integer child : children) {
-			File f = new File("/proc/" + child + "/smaps");
+				if (f.exists() && f.canRead()) {
+					try (BufferedReader br = new BufferedReader(new FileReader(f))) {
+						String s;
 
-			if (f.exists() && f.canRead()) {
-				try (BufferedReader br = new BufferedReader(new FileReader(f))) {
-					String s;
+						while ((s = br.readLine()) != null) {
+							// File content is something like this (the keys that we are missing from the `ps` output only):
+							// Pss: 16 kB
+							// SwapPss: 0 kB
+							if (s.startsWith("Pss:") || s.startsWith("SwapPss:")) {
+								final StringTokenizer st = new StringTokenizer(s);
 
-					while ((s = br.readLine()) != null) {
-						// File content is something like this (the keys that we are missing from the `ps` output only):
-						// Pss: 16 kB
-						// SwapPss: 0 kB
-						if (s.startsWith("Pss:") || s.startsWith("SwapPss:")) {
-							final StringTokenizer st = new StringTokenizer(s);
+								if (st.countTokens() == 3) {
+									st.nextToken();
+									try {
+										long value = Long.parseLong(st.nextToken());
 
-							if (st.countTokens() == 3) {
-								st.nextToken();
-								try {
-									long value = Long.parseLong(st.nextToken());
-
-									if (s.startsWith("S"))
-										swapPssKB += value;
-									else
-										pssKB += value;
-								}
-								catch (@SuppressWarnings("unused") final NumberFormatException nfe) {
-									// ignore
+										if (s.startsWith("S"))
+											swapPssKB += value;
+										else
+											pssKB += value;
+									}
+									catch (@SuppressWarnings("unused") final NumberFormatException nfe) {
+										// ignore
+									}
 								}
 							}
 						}
 					}
-				}
-				catch (@SuppressWarnings("unused") final IOException | IllegalArgumentException e) {
-					// ignore
+					catch (@SuppressWarnings("unused") final IOException | IllegalArgumentException e) {
+						// ignore
+					}
 				}
 			}
+
+			ret.put(ApMonMonitoringConstants.LJOB_RUN_TIME, Double.valueOf(elapsedtime * numCPUs));
+			if (isLinux)
+				ret.put(ApMonMonitoringConstants.LJOB_CPU_TIME, Double.valueOf(totalCPUTime / hertz));
+			else
+				ret.put(ApMonMonitoringConstants.LJOB_CPU_TIME, Double.valueOf(totalCPUTime));
+			ret.put(ApMonMonitoringConstants.LJOB_CPU_USAGE, Double.valueOf(cpuEfficiency));
+			ret.put(ApMonMonitoringConstants.LJOB_INSTANT_CPU_USAGE, Double.valueOf(instantCpuEfficiency));
+			ret.put(ApMonMonitoringConstants.LJOB_MEM_USAGE, Double.valueOf(pmem));
+			ret.put(ApMonMonitoringConstants.LJOB_RSS, Double.valueOf(rsz));
+			ret.put(ApMonMonitoringConstants.LJOB_VIRTUALMEM, Double.valueOf(vsz));
+			ret.put(ApMonMonitoringConstants.LJOB_OPEN_FILES, Double.valueOf(fd));
+
+			if (pssKB == 0 && rsz > 0) {
+				// fake the PSS values if they are not supported, assuming that
+				// PSS == RSS and SwapPSS = Virtual - RSS
+
+				pssKB = rsz;
+				swapPssKB = vsz - rsz;
+			}
+
+			ret.put(ApMonMonitoringConstants.LJOB_PSS, Double.valueOf(pssKB));
+			ret.put(ApMonMonitoringConstants.LJOB_SWAPPSS, Double.valueOf(swapPssKB));
+
+			if (payloadMonitoring == true && payloadPid != 0)
+				readJobInfoExtraParams();
+
+			previousMeasureTime = currentMeasureTime;
 		}
-
-		ret.put(ApMonMonitoringConstants.LJOB_RUN_TIME, Double.valueOf(elapsedtime * numCPUs));
-		if (isLinux)
-			ret.put(ApMonMonitoringConstants.LJOB_CPU_TIME, Double.valueOf(totalCPUTime / hertz));
-		else
-			ret.put(ApMonMonitoringConstants.LJOB_CPU_TIME, Double.valueOf(totalCPUTime));
-		ret.put(ApMonMonitoringConstants.LJOB_CPU_USAGE, Double.valueOf(cpuEfficiency));
-		ret.put(ApMonMonitoringConstants.LJOB_INSTANT_CPU_USAGE, Double.valueOf(instantCpuEfficiency));
-		ret.put(ApMonMonitoringConstants.LJOB_MEM_USAGE, Double.valueOf(pmem));
-		ret.put(ApMonMonitoringConstants.LJOB_RSS, Double.valueOf(rsz));
-		ret.put(ApMonMonitoringConstants.LJOB_VIRTUALMEM, Double.valueOf(vsz));
-		ret.put(ApMonMonitoringConstants.LJOB_OPEN_FILES, Double.valueOf(fd));
-
-		if (pssKB == 0 && rsz > 0) {
-			// fake the PSS values if they are not supported, assuming that
-			// PSS == RSS and SwapPSS = Virtual - RSS
-
-			pssKB = rsz;
-			swapPssKB = vsz - rsz;
-		}
-
-		ret.put(ApMonMonitoringConstants.LJOB_PSS, Double.valueOf(pssKB));
-		ret.put(ApMonMonitoringConstants.LJOB_SWAPPSS, Double.valueOf(swapPssKB));
-
-		if (payloadMonitoring == true && payloadPid != 0)
-			readJobInfoExtraParams();
-
-		previousMeasureTime = currentMeasureTime;
 		return ret;
 	}
 
