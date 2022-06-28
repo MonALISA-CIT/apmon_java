@@ -763,11 +763,12 @@ public class MonitoredJob implements AutoCloseable {
 					}
 
 				} catch (IOException | IllegalArgumentException e) {
-					logger.log(Level.WARNING, "The file " + filename
-							+ " output could not be accessed. The process might have already died.\n" + e);
+					if (logger.isLoggable(Level.FINE))
+						logger.log(Level.FINE, "The file " + filename + " output could not be accessed. The process might have already died.\n" + e);
 				}
 			} else {
-				logger.log(Level.WARNING, "The file " + filename + " does NOT exist");
+				if (logger.isLoggable(Level.FINE))
+					logger.log(Level.FINE, "The file " + filename + " does NOT exist");
 			}
 		}
 
