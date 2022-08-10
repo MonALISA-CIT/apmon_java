@@ -33,11 +33,12 @@
 package apmon;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.io.StringReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.NoSuchElementException;
@@ -380,7 +381,6 @@ public class MonitoredJob implements AutoCloseable {
 		if (idx > 0)
 			result = result.substring(idx + 1);
 
-
 		synchronized (requestSync) {
 			double previousTotalCPUTime = totalCPUTime;
 			long currentMeasureTime = System.currentTimeMillis();
@@ -437,40 +437,41 @@ public class MonitoredJob implements AutoCloseable {
 
 			double pssKB = 0;
 			double swapPssKB = 0;
-			for (Integer child : children) {
-				File f = new File("/proc/" + child + "/smaps");
+			for (final Integer child : children) {
+				try {
+					final String content = Files.readString(Path.of("/proc/" + child + "/smaps"));
 
-				if (f.exists() && f.canRead()) {
-					try (BufferedReader br = new BufferedReader(new FileReader(f))) {
+					try (BufferedReader br = new BufferedReader(new StringReader(content))) {
 						String s;
 
 						while ((s = br.readLine()) != null) {
 							// File content is something like this (the keys that we are missing from the `ps` output only):
 							// Pss: 16 kB
 							// SwapPss: 0 kB
-							if (s.startsWith("Pss:") || s.startsWith("SwapPss:")) {
-								final StringTokenizer st = new StringTokenizer(s);
 
-								if (st.countTokens() == 3) {
-									st.nextToken();
-									try {
-										long value = Long.parseLong(st.nextToken());
+							if (s.length()<8)
+								continue;
+							
+							final char c0 = s.charAt(0);
 
-										if (s.startsWith("S"))
-											swapPssKB += value;
-										else
-											pssKB += value;
-									}
-									catch (@SuppressWarnings("unused") final NumberFormatException nfe) {
-										// ignore
-									}
+							if ((c0 == 'P' && s.startsWith("Pss:")) || (c0 == 'S' && s.startsWith("SwapPss:"))) {
+								final int idxLast = s.lastIndexOf(' ');
+								final int idxPrev = s.lastIndexOf(' ', idxLast - 1);
+
+								if (idxPrev > 0 && idxLast > 0) {
+									final long value = Long.parseLong(s.substring(idxPrev + 1, idxLast));
+
+									if (c0 == 'S')
+										swapPssKB += value;
+									else
+										pssKB += value;
 								}
 							}
 						}
 					}
-					catch (@SuppressWarnings("unused") final IOException | IllegalArgumentException e) {
-						// ignore
-					}
+				}
+				catch (@SuppressWarnings("unused") final IOException | IllegalArgumentException e) {
+					// ignore
 				}
 			}
 
@@ -570,7 +571,8 @@ public class MonitoredJob implements AutoCloseable {
 						if (threadId.isDirectory()) {
 							try {
 								threads.add(Integer.valueOf(threadId.getName()));
-							} catch (NumberFormatException e) {
+							}
+							catch (NumberFormatException e) {
 								logger.log(Level.WARNING, "Some of the /proc/" + child
 										+ "/task directory names did not have the correct formatting. \n" + e);
 							}
@@ -654,8 +656,6 @@ public class MonitoredJob implements AutoCloseable {
 		} else
 			logger.log(Level.INFO, "The job has no children");
 	}
-
-
 
 	private void checkRegisteredCommand(Integer procPid) {
 		if (!procCommands.containsKey(procPid)) {
@@ -742,7 +742,6 @@ public class MonitoredJob implements AutoCloseable {
 		for (Integer child : children) {
 			filename = "/proc/" + child + "/stat";
 			File f = new File(filename);
-			double procCpuTime = 0;
 
 			if (f.exists() && f.canRead()) {
 				try (BufferedReader br = new BufferedReader(new FileReader(f))) {
@@ -751,7 +750,7 @@ public class MonitoredJob implements AutoCloseable {
 						String[] splitted = s.split(" ");
 						try {
 							if (splitted.length >= 15) {
-								procCpuTime = Double.parseDouble(splitted[13]) + Double.parseDouble(splitted[14]);
+								final double procCpuTime = Double.parseDouble(splitted[13]) + Double.parseDouble(splitted[14]);
 								currentProcCPUTime.put(child, Double.valueOf(procCpuTime));
 								totalCPUTime = totalCPUTime + procCpuTime
 										- previousProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue();
