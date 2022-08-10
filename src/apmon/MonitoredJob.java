@@ -46,6 +46,7 @@ import java.util.StringTokenizer;
 import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.PatternSyntaxException;
 
 import apmon.lisa_host.cmdExec;
 
@@ -810,7 +811,6 @@ public class MonitoredJob implements AutoCloseable {
 		currentProcCPUTime.clear();
 		for (Integer child : children) {
 			final String filename = "/proc/" + child + "/stat";
-
 			try {
 				String s = Files.readString(Path.of(filename));
 				int count, old_idx;
@@ -983,7 +983,7 @@ public class MonitoredJob implements AutoCloseable {
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	public void setPayloadMonitoring() {
 		payloadMonitoring = true;
