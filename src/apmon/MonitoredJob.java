@@ -91,6 +91,7 @@ public class MonitoredJob implements AutoCloseable {
 	final HashMap<String, Double> nonvoluntaryCS;
 	double totalCPUTime;
 	long previousMeasureTime;
+	long initialMeasureTime;
 	double totalVoluntaryContextSwitches;
 	double totalNonVoluntaryContextSwitches;
 	final HashMap<String, Double> countStats;
@@ -869,14 +870,16 @@ public class MonitoredJob implements AutoCloseable {
 				registerConsumedCPUPerCommand(previousProcCPUTime, timeDiff);
 
 			instantCpuEfficiency = 100000 * (((totalCPUTime - previousTotalCPUTime) / hertz) / timeDiff); // Current instantaneous efficiency
+
 			if (instantCpuEfficiency > 1000) {
 				logger.log(Level.WARNING, "Instantaneous CPU efficiency = "
 						+ String.format("%.2f", Double.valueOf(instantCpuEfficiency)) + " %.");
 			}
 		}
-
-		cpuEfficiency = 100 * (totalCPUTime / hertz) / (elapsedtime * numCPUs); // If we want to get the average
+		final double etime = (elapsedtime == 0) ? (currentMeasureTime - initialMeasureTime) : elapsedtime;
+		cpuEfficiency = 100 * (totalCPUTime / hertz) / (etime * numCPUs); // If we want to get the average
 																				// efficiency
+		logger.log(Level.INFO, "DBG: AVG CPU Efficiency = " + String.format("%.2f", Double.valueOf(cpuEfficiency)) + " %. Job " + pid + " Workdir " + workDir);
 		// logger.log(Level.INFO, "Average CPU efficiency = " + String.format("%.2f", Double.valueOf(cpuEfficiency)) + " %");
 	}
 
