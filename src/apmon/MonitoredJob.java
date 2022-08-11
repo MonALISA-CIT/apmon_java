@@ -149,7 +149,7 @@ public class MonitoredJob implements AutoCloseable {
 		this.currentProcCPUTime = new HashMap<>();
 		this.voluntaryCS = new HashMap<>();
 		this.nonvoluntaryCS = new HashMap<>();
-		this.previousMeasureTime = System.currentTimeMillis();
+		this.previousMeasureTime = 0;
 		this.payloadMonitoring = false;
 		this.countStats = new HashMap<>();
 		this.commandVoluntaryCS = new HashMap<>();
@@ -429,7 +429,7 @@ public class MonitoredJob implements AutoCloseable {
 			if (isLinux)
 				getCpuEfficiency(children, elapsedtime, previousTotalCPUTime);
 			else {
-				if ((totalCPUTime - previousTotalCPUTime) > 0)
+				if (previousMeasureTime > 0 && (totalCPUTime - previousTotalCPUTime) > 0)
 					instantCpuEfficiency =  100000 * (totalCPUTime - previousTotalCPUTime) / (currentMeasureTime - previousMeasureTime);
 				else
 					instantCpuEfficiency = 0;
@@ -612,11 +612,17 @@ public class MonitoredJob implements AutoCloseable {
 				thread_count = thread_count + threads.size();
 			}
 
-			long timeDiff = currentMeasureTime - previousMeasureTime;
-			double voluntaryContextSwitchingRate = 1000
-					* (totalVoluntaryContextSwitches - previousVoluntaryTotalContextSwitches) / timeDiff;
-			double nonVoluntaryContextSwitchingRate = 1000
-					* (totalNonVoluntaryContextSwitches - previousNonVoluntaryTotalContextSwitches) / timeDiff;
+			if (previousMeasureTime > 0) {
+				long timeDiff = currentMeasureTime - previousMeasureTime;
+				double voluntaryContextSwitchingRate = 1000
+						* (totalVoluntaryContextSwitches - previousVoluntaryTotalContextSwitches) / timeDiff;
+				double nonVoluntaryContextSwitchingRate = 1000
+						* (totalNonVoluntaryContextSwitches - previousNonVoluntaryTotalContextSwitches) / timeDiff;
+				countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_RATE_CONTEXTSW)
+						+ "_voluntary", Double.valueOf(voluntaryContextSwitchingRate));
+				countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_RATE_CONTEXTSW)
+						+ "_nonvoluntary", Double.valueOf(nonVoluntaryContextSwitchingRate));
+			}
 
 			countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_TOTAL_PROCS),
 					Double.valueOf(children.size()));
@@ -641,10 +647,7 @@ public class MonitoredJob implements AutoCloseable {
 			for (String command : instantCommandCPUEfficiency.keySet())
 				countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_CPU_USAGE) + "_"
 						+ command, instantCommandCPUEfficiency.get(command));
-			countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_RATE_CONTEXTSW)
-					+ "_voluntary", Double.valueOf(voluntaryContextSwitchingRate));
-			countStats.put(ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_RATE_CONTEXTSW)
-					+ "_nonvoluntary", Double.valueOf(nonVoluntaryContextSwitchingRate));
+
 			countStats.put(
 					ApMonMonitoringConstants.getJobMLParamName(ApMonMonitoringConstants.LJOB_TOTAL_VOLUNTARY_CONTEXTSW)
 							+ "_total",
@@ -771,14 +774,17 @@ public class MonitoredJob implements AutoCloseable {
 			}
 		}
 
-		long timeDiff = currentMeasureTime - previousMeasureTime;
-		registerConsumedCPUPerCommand(previousProcCPUTime, timeDiff);
-
-		instantCpuEfficiency = 100000 * (((totalCPUTime - previousTotalCPUTime) / hertz) / timeDiff); // Current instantaneous efficiency
-		if (instantCpuEfficiency > 1000) {
-			logger.log(Level.WARNING, "Instantaneous CPU efficiency = "
-					+ String.format("%.2f", Double.valueOf(instantCpuEfficiency)) + " %.");
+		if (previousMeasureTime>0) {
+			long timeDiff = currentMeasureTime - previousMeasureTime;
+			registerConsumedCPUPerCommand(previousProcCPUTime, timeDiff);
+	
+			instantCpuEfficiency = 100000 * (((totalCPUTime - previousTotalCPUTime) / hertz) / timeDiff); // Current instantaneous efficiency
+			if (instantCpuEfficiency > 1000) {
+				logger.log(Level.WARNING, "Instantaneous CPU efficiency = "
+						+ String.format("%.2f", Double.valueOf(instantCpuEfficiency)) + " %.");
+			}
 		}
+		
 		cpuEfficiency = 100 * (totalCPUTime / hertz) / (elapsedtime * numCPUs); // If we want to get the average
 																				// efficiency
 		// logger.log(Level.INFO, "Average CPU efficiency = " + String.format("%.2f", Double.valueOf(cpuEfficiency)) + " %");
