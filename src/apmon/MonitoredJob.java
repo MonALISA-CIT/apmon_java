@@ -506,7 +506,7 @@ public class MonitoredJob implements AutoCloseable {
 		return ret;
 	}
 
-	/*
+	/**
 	 * @param payloadGrep Pattern to grep for finding the payload
 	 */
 	public void discoverPayloadPid(String payloadGrep) {
@@ -885,15 +885,24 @@ public class MonitoredJob implements AutoCloseable {
 			exec.close();
 	}
 
+	/**
+	 * @param wrapperPid
+	 */
 	public void setWrapperPid(int wrapperPid) {
 		this.wrapperPid = wrapperPid;
 	}
 
+	/**
+	 * 
+	 */
 	public void setPayloadMonitoring() {
 		payloadMonitoring = true;
 		logger.log(Level.INFO, "Payload monitoring has been activated");
 	}
 
+	/**
+	 * @return <code>true</code> if payload monitoring is enabled
+	 */
 	public boolean getPayloadMonitoring() {
 		return payloadMonitoring;
 	}
