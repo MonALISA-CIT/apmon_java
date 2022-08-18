@@ -1,8 +1,8 @@
 package apmon.lisa_host;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.StringTokenizer;
 
 /**
@@ -41,15 +41,8 @@ public class Parser {
 	 * @param fileName
 	 */
 	public void parseFromFile(String fileName) {
-		try (BufferedReader reader = new BufferedReader(new FileReader(fileName))) {
-			final StringBuilder str = new StringBuilder();
-			String line;
-			while ((line = reader.readLine()) != null) {
-				if (str.length() > 0)
-					str.append('\n');
-				str.append(line);
-			}
-			st = new StringTokenizer(str.toString());
+		try {
+			st = new StringTokenizer(Files.readString(Path.of(fileName)));
 		}
 		catch (@SuppressWarnings("unused") Throwable t) {
 			st = null;

@@ -432,7 +432,7 @@ public class ProcReader {
 		swapFree = swapTotal = memUsage = memFree = memUsed = null;
 		parser.parseFromFile("/proc/meminfo");
 		line = parser.nextLine();
-		double dmemTotal = 0.0, dmemFree = 0.0;
+		double dmemTotal = 0.0, dmemFree = 0.0, dst = 0, dsf = 0;
 		while (line != null) {
 			if (line.startsWith("MemTotal")) {
 				line = Parser.getTextAfterToken(line, "MemTotal:");
@@ -468,19 +468,37 @@ public class ProcReader {
 						line = Parser.getTextAfterToken(line, "SwapTotal:");
 						parser.parseAux(line);
 						swapTotal = parser.nextAuxToken();
+
+						double d = 0.0;
+						try {
+							d = Double.parseDouble(swapTotal);
+						}
+						catch (@SuppressWarnings("unused") Exception e) {
+							d = -1.0;
+						}
+						if (d >= 0.0)
+							dst = d;
 					}
 					else
 						if (line.startsWith("SwapFree")) {
 							line = Parser.getTextAfterToken(line, "SwapFree:");
 							parser.parseAux(line);
 							swapFree = parser.nextAuxToken();
+
+							double d = 0.0;
+							try {
+								d = Double.parseDouble(swapFree);
+							}
+							catch (@SuppressWarnings("unused") Exception e) {
+								d = -1.0;
+							}
+							if (d >= 0.0)
+								dsf = d;
 						}
 
 			line = parser.nextLine();
 		}
 
-		double dst = Double.parseDouble(swapTotal);
-		double dsf = Double.parseDouble(swapFree);
 		double dsu = dst - dsf;
 
 		swapUsed = "" + dsu;
@@ -1315,6 +1333,8 @@ public class ProcReader {
 			System.out.println("Mem usage: " + reader.getMemUsage());
 			System.out.println("Mem used: " + reader.getMemUsed());
 			System.out.println("Mem free: " + reader.getMemFree());
+			System.out.println("Swap total: " + reader.getSwapTotal());
+			System.out.println("Swap free: " + reader.getSwapFree());
 			System.out.println("");
 			System.out.println("Disk total: " + reader.getDiskTotal());
 			System.out.println("Disk used: " + reader.getDiskUsed());
