@@ -322,7 +322,6 @@ public class MonitoredJob implements AutoCloseable {
 	 * @throws IOException
 	 */
 	public HashMap<Long, Double> readJobInfo() throws IOException {
-		Vector<Integer> children;
 		HashMap<Long, Double> ret = new HashMap<>();
 		String result = null;
 		String line = null;
@@ -353,35 +352,35 @@ public class MonitoredJob implements AutoCloseable {
 		 */
 		Vector<String> mem_cmd_list = new Vector<>();
 
-		/* get the list of the process' descendants */
-		children = getChildren(pid);
-
-		if (children == null)
-			return null;
-
-		logger.fine("Number of children for process " + pid + ": " + children.size());
-
-		/* issue the "ps" command to obtain information on all the descendants */
-		final StringBuilder cmd = new StringBuilder("ps -p ");
-		for (i = 0; i < children.size(); i++) {
-			if (i > 0)
-				cmd.append(',');
-			cmd.append(children.elementAt(i));
-		}
-
-		if (isLinux)
-			cmd.append(" -o pid,etime,%mem,rss,vsz,comm");
-		else
-			cmd.append(" -o pid,etime,time,%cpu,%mem,rss,vsz,comm");
-		result = exec.executeCommandReality(cmd.toString(), "");
-
-		// skip over the first line of the `ps` output
-		int idx = result.indexOf('\n');
-
-		if (idx > 0)
-			result = result.substring(idx + 1);
-
 		synchronized (requestSync) {
+			/* get the list of the process' descendants */
+			final Vector<Integer> children = getChildren(pid);
+	
+			if (children == null)
+				return null;
+	
+			logger.fine("Number of children for process " + pid + ": " + children.size());
+	
+			/* issue the "ps" command to obtain information on all the descendants */
+			final StringBuilder cmd = new StringBuilder("ps -p ");
+			for (i = 0; i < children.size(); i++) {
+				if (i > 0)
+					cmd.append(',');
+				cmd.append(children.elementAt(i));
+			}
+	
+			if (isLinux)
+				cmd.append(" -o pid,etime,%mem,rss,vsz,comm");
+			else
+				cmd.append(" -o pid,etime,time,%cpu,%mem,rss,vsz,comm");
+			result = exec.executeCommandReality(cmd.toString(), "");
+	
+			// skip over the first line of the `ps` output
+			int idx = result.indexOf('\n');
+	
+			if (idx > 0)
+				result = result.substring(idx + 1);
+		
 			double previousTotalCPUTime = totalCPUTime;
 			long currentMeasureTime = System.currentTimeMillis();
 			StringTokenizer rst = new StringTokenizer(result, "\n");
@@ -528,9 +527,9 @@ public class MonitoredJob implements AutoCloseable {
 		HashMap<String, Double> threadStatus = new HashMap<>();
 		int thread_count = 0;
 		long currentMeasureTime = System.currentTimeMillis();
-		HashMap<String, Double> previousVoluntaryCS = (HashMap<String, Double>) voluntaryCS.clone();
+		HashMap<String, Double> previousVoluntaryCS = new HashMap<>(voluntaryCS);
 		voluntaryCS.clear();
-		HashMap<String, Double> previousNonVoluntaryCS = (HashMap<String, Double>) nonvoluntaryCS.clone();
+		HashMap<String, Double> previousNonVoluntaryCS = new HashMap<>(nonvoluntaryCS);
 		nonvoluntaryCS.clear();
 		double previousVoluntaryTotalContextSwitches = totalVoluntaryContextSwitches;
 		double previousNonVoluntaryTotalContextSwitches = totalNonVoluntaryContextSwitches;
@@ -739,7 +738,7 @@ public class MonitoredJob implements AutoCloseable {
 	 */
 	private void getCpuEfficiency(Vector<Integer> children, double elapsedtime, double previousTotalCPUTime) {
 		long currentMeasureTime = System.currentTimeMillis();
-		HashMap<Integer, Double> previousProcCPUTime = (HashMap<Integer, Double>) currentProcCPUTime.clone();
+		HashMap<Integer, Double> previousProcCPUTime = new HashMap<>(currentProcCPUTime);
 		currentProcCPUTime.clear();
 		String filename;
 		for (Integer child : children) {
