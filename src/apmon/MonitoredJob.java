@@ -191,7 +191,14 @@ public class MonitoredJob implements AutoCloseable {
 
 			cmd = "du -Lscm '" + safeWorkDir + "' | tail -1 | cut -f 1";
 			result = exec.executeCommandReality(cmd, "");
-			workdir_size = Double.parseDouble(result);
+			
+			try {
+				workdir_size = Double.parseDouble(result);
+			}
+			catch (NumberFormatException nfe2) {
+				if (logger.isLoggable(Level.WARNING))
+					logger.log(Level.WARNING, "Exception parsing the output of `" + cmd + "`", nfe2);
+			}
 		}
 
 		hm.put(ApMonMonitoringConstants.LJOB_WORKDIR_SIZE, Double.valueOf(workdir_size));
