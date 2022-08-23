@@ -876,7 +876,7 @@ public class MonitoredJob implements AutoCloseable {
 						+ String.format("%.2f", Double.valueOf(instantCpuEfficiency)) + " %.");
 			}
 		}
-		final double etime = (elapsedtime == 0) ? (currentMeasureTime - initialMeasureTime) : elapsedtime;
+		final double etime = (elapsedtime == 0) ? (currentMeasureTime - initialMeasureTime) / 1000 : elapsedtime;
 		cpuEfficiency = 100 * (totalCPUTime / hertz) / (etime * numCPUs); // If we want to get the average
 																				// efficiency
 		logger.log(Level.INFO, "DBG: AVG CPU Efficiency = " + String.format("%.2f", Double.valueOf(cpuEfficiency)) + " %. Job " + pid + " Workdir " + workDir);
