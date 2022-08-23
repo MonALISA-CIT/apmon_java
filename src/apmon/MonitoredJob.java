@@ -140,11 +140,13 @@ public class MonitoredJob implements AutoCloseable {
 			this.isLinux = true;
 			try {
 				this.hertz = Integer.parseInt(exec.executeCommandReality("getconf CLK_TCK", "").replace("\n", ""));
-			} catch (NumberFormatException e) {
+			}
+			catch (NumberFormatException e) {
 				this.hertz = 100;
 				logger.log(Level.SEVERE, "Could not get CLK_TCK variable from the system. Assigning a default 100 Hz. \n" + e);
 			}
-		} else
+		}
+		else
 			this.isLinux = false;
 		this.currentProcCPUTime = new HashMap<>();
 		this.voluntaryCS = new HashMap<>();
@@ -170,6 +172,19 @@ public class MonitoredJob implements AutoCloseable {
 	 * @return disk usage
 	 */
 	public HashMap<Long, Double> readJobDiskUsage() {
+		return readJobDiskUsage(false);
+	}
+
+	private HashMap<Long, Double> cachedJobDiskUsage = null;
+
+	/**
+	 * @param cachedData <code>true</code> to reuse (if any) previous data
+	 * @return disk usage
+	 */
+	public HashMap<Long, Double> readJobDiskUsage(final boolean cachedData) {
+		if (cachedData && cachedJobDiskUsage != null)
+			return cachedJobDiskUsage;
+
 		HashMap<Long, Double> hm = new HashMap<>();
 		String cmd = null, aux = null, result = null;
 		double workdir_size = 0.0, disk_total = 0.0, disk_used = 0.0, disk_free = 0.0, disk_usage = 0.0;
@@ -187,11 +202,11 @@ public class MonitoredJob implements AutoCloseable {
 		}
 		catch (NumberFormatException nfe) {
 			if (logger.isLoggable(Level.WARNING))
-				logger.log(Level.WARNING, "Exception parsing the output of `" + cmd + "`", nfe);
+				logger.log(Level.WARNING, "Exception parsing the output of `" + cmd + "`: " + result, nfe);
 
 			cmd = "du -Lscm '" + safeWorkDir + "' | tail -1 | cut -f 1";
 			result = exec.executeCommandReality(cmd, "");
-			
+
 			try {
 				workdir_size = Double.parseDouble(result);
 			}
@@ -224,6 +239,8 @@ public class MonitoredJob implements AutoCloseable {
 		aux = st.nextToken();
 		disk_usage = Double.parseDouble(aux);
 		hm.put(ApMonMonitoringConstants.LJOB_DISK_USAGE, Double.valueOf(disk_usage));
+
+		cachedJobDiskUsage = hm;
 
 		return hm;
 	}
@@ -285,7 +302,8 @@ public class MonitoredJob implements AutoCloseable {
 				}
 				i++;
 			}
-		} catch (NoSuchElementException e) {
+		}
+		catch (NoSuchElementException e) {
 			logger.log(Level.INFO, "Could not parse contents of `ps -eo ppid,pid` command \n" + e);
 		}
 
@@ -329,6 +347,20 @@ public class MonitoredJob implements AutoCloseable {
 	 * @throws IOException
 	 */
 	public HashMap<Long, Double> readJobInfo() throws IOException {
+		return readJobInfo(false);
+	}
+
+	private HashMap<Long, Double> cachedJobInfo = null;
+
+	/**
+	 * @param cachedData if <code>true</code> then reuse the same job info data that was collected by a previous call to this method (when this parameter is <code>false</code>)
+	 * @return job monitoring
+	 * @throws IOException
+	 */
+	public HashMap<Long, Double> readJobInfo(final boolean cachedData) throws IOException {
+		if (cachedData && cachedJobInfo != null)
+			return cachedJobInfo;
+
 		HashMap<Long, Double> ret = new HashMap<>();
 		String result = null;
 		String line = null;
@@ -347,11 +379,6 @@ public class MonitoredJob implements AutoCloseable {
 
 		double elapsedtime = 0.0;
 
-		if (!isLinux) {
-			totalCPUTime = 0.0;
-			cpuEfficiency = 0.0;
-		}
-
 		/*
 		 * this list contains strings of the form "rsz_vsz_command" for every pid; it is used to avoid adding several times processes that have multiple threads and appear in ps as
 		 * separate processes, occupying exactly the same amount of memory and having the same command name. For every line from the output of the ps command we verify if the
@@ -362,12 +389,12 @@ public class MonitoredJob implements AutoCloseable {
 		synchronized (requestSync) {
 			/* get the list of the process' descendants */
 			final Vector<Integer> children = getChildren(pid);
-	
+
 			if (children == null)
 				return null;
-	
+
 			logger.fine("Number of children for process " + pid + ": " + children.size());
-	
+
 			/* issue the "ps" command to obtain information on all the descendants */
 			final StringBuilder cmd = new StringBuilder("ps -p ");
 			for (i = 0; i < children.size(); i++) {
@@ -375,19 +402,23 @@ public class MonitoredJob implements AutoCloseable {
 					cmd.append(',');
 				cmd.append(children.elementAt(i));
 			}
-	
+
 			if (isLinux)
 				cmd.append(" -o pid,etime,%mem,rss,vsz,comm");
-			else
+			else {
 				cmd.append(" -o pid,etime,time,%cpu,%mem,rss,vsz,comm");
+				totalCPUTime = 0.0;
+				cpuEfficiency = 0.0;
+			}
+
 			result = exec.executeCommandReality(cmd.toString(), "");
-	
+
 			// skip over the first line of the `ps` output
 			int idx = result.indexOf('\n');
-	
+
 			if (idx > 0)
 				result = result.substring(idx + 1);
-		
+
 			double previousTotalCPUTime = totalCPUTime;
 			long currentMeasureTime = System.currentTimeMillis();
 			StringTokenizer rst = new StringTokenizer(result, "\n");
@@ -432,11 +463,15 @@ public class MonitoredJob implements AutoCloseable {
 				}
 			}
 
+			if (elapsedtime < 0.0000001) {
+				return null;
+			}
+
 			if (isLinux)
 				getCpuEfficiency(children, elapsedtime, previousTotalCPUTime);
 			else {
 				if (previousMeasureTime > 0 && (totalCPUTime - previousTotalCPUTime) > 0)
-					instantCpuEfficiency =  100000 * (totalCPUTime - previousTotalCPUTime) / (currentMeasureTime - previousMeasureTime);
+					instantCpuEfficiency = 100000 * (totalCPUTime - previousTotalCPUTime) / (currentMeasureTime - previousMeasureTime);
 				else
 					instantCpuEfficiency = 0;
 			}
@@ -455,9 +490,9 @@ public class MonitoredJob implements AutoCloseable {
 							// Pss: 16 kB
 							// SwapPss: 0 kB
 
-							if (s.length()<8)
+							if (s.length() < 8)
 								continue;
-							
+
 							final char c0 = s.charAt(0);
 
 							if ((c0 == 'P' && s.startsWith("Pss:")) || (c0 == 'S' && s.startsWith("SwapPss:"))) {
@@ -509,6 +544,9 @@ public class MonitoredJob implements AutoCloseable {
 
 			previousMeasureTime = currentMeasureTime;
 		}
+
+		cachedJobInfo = ret;
+
 		return ret;
 	}
 
@@ -557,7 +595,7 @@ public class MonitoredJob implements AutoCloseable {
 
 					String command = procCommands.get(child);
 					if (command != null)
-						commandVoluntaryCS.put(command,  Double.valueOf(commandVoluntaryCS.getOrDefault(command, Double.valueOf(0)).doubleValue() + newCS));
+						commandVoluntaryCS.put(command, Double.valueOf(commandVoluntaryCS.getOrDefault(command, Double.valueOf(0)).doubleValue() + newCS));
 				}
 				if (cs.containsKey("nonvoluntary")) {
 					double newCS = cs.get("nonvoluntary").doubleValue()
@@ -566,7 +604,7 @@ public class MonitoredJob implements AutoCloseable {
 					nonvoluntaryCS.put(child.toString(), cs.get("nonvoluntary"));
 					String command = procCommands.get(child);
 					if (command != null)
-						commandNonvoluntaryCS.put(command,  Double.valueOf(commandNonvoluntaryCS.getOrDefault(command, Double.valueOf(0)).doubleValue() + newCS));
+						commandNonvoluntaryCS.put(command, Double.valueOf(commandNonvoluntaryCS.getOrDefault(command, Double.valueOf(0)).doubleValue() + newCS));
 				}
 
 				ArrayList<Integer> threads = new ArrayList<>();
@@ -593,25 +631,25 @@ public class MonitoredJob implements AutoCloseable {
 
 						if (cs.containsKey("voluntary")) {
 							double newCS = cs.get("voluntary").doubleValue()
-							- previousVoluntaryCS
-									.getOrDefault(child.toString() + "-" + thread.toString(), Double.valueOf(0))
-									.doubleValue();
+									- previousVoluntaryCS
+											.getOrDefault(child.toString() + "-" + thread.toString(), Double.valueOf(0))
+											.doubleValue();
 							totalVoluntaryContextSwitches = totalVoluntaryContextSwitches + newCS;
 							voluntaryCS.put(child.toString() + "-" + thread.toString(), cs.get("voluntary"));
 							String command = procCommands.get(thread);
 							if (command != null)
-								commandVoluntaryCS.put(command,  Double.valueOf(commandVoluntaryCS.getOrDefault(command, Double.valueOf(0)).doubleValue() + newCS));
+								commandVoluntaryCS.put(command, Double.valueOf(commandVoluntaryCS.getOrDefault(command, Double.valueOf(0)).doubleValue() + newCS));
 						}
 						if (cs.containsKey("nonvoluntary")) {
 							double newCS = cs.get("nonvoluntary").doubleValue()
 									- previousNonVoluntaryCS
-									.getOrDefault(child.toString() + "-" + thread.toString(), Double.valueOf(0))
-									.doubleValue();
+											.getOrDefault(child.toString() + "-" + thread.toString(), Double.valueOf(0))
+											.doubleValue();
 							totalNonVoluntaryContextSwitches = totalNonVoluntaryContextSwitches + newCS;
 							nonvoluntaryCS.put(child.toString() + "-" + thread.toString(), cs.get("nonvoluntary"));
 							String command = procCommands.get(thread);
 							if (command != null)
-								commandNonvoluntaryCS.put(command,  Double.valueOf(commandNonvoluntaryCS.getOrDefault(command, Double.valueOf(0)).doubleValue() + newCS));
+								commandNonvoluntaryCS.put(command, Double.valueOf(commandNonvoluntaryCS.getOrDefault(command, Double.valueOf(0)).doubleValue() + newCS));
 						}
 					}
 				}
@@ -662,7 +700,8 @@ public class MonitoredJob implements AutoCloseable {
 					ApMonMonitoringConstants
 							.getJobMLParamName(ApMonMonitoringConstants.LJOB_TOTAL_NONVOLUNTARY_CONTEXTSW) + "_total",
 					Double.valueOf(totalNonVoluntaryContextSwitches));
-		} else
+		}
+		else
 			logger.log(Level.INFO, "The job has no children");
 	}
 
@@ -678,7 +717,8 @@ public class MonitoredJob implements AutoCloseable {
 							s = s.substring(s.lastIndexOf('/') + 1);
 						procCommands.put(procPid, s);
 					}
-				} catch (IOException | IllegalArgumentException e) {
+				}
+				catch (IOException | IllegalArgumentException e) {
 					logger.log(Level.WARNING, "The file /proc/" + pid + "/cmdline could not be accessed.\n" + e);
 				}
 			}
@@ -720,13 +760,15 @@ public class MonitoredJob implements AutoCloseable {
 									contextSwitches.getOrDefault("nonvoluntary", Double.valueOf(0)).doubleValue()
 											+ cs));
 						}
-					} catch (NumberFormatException e) {
+					}
+					catch (NumberFormatException e) {
 						logger.log(Level.WARNING,
 								"The file " + filename + " does not have the correct formatting. \n" + e);
 					}
 				}
 
-			} catch (IOException | IllegalArgumentException e) {
+			}
+			catch (IOException | IllegalArgumentException e) {
 				logger.log(Level.WARNING,
 						"The file " + filename + " does NOT exist or has incorrect formatting.\n" + e);
 			}
@@ -747,50 +789,73 @@ public class MonitoredJob implements AutoCloseable {
 		long currentMeasureTime = System.currentTimeMillis();
 		HashMap<Integer, Double> previousProcCPUTime = new HashMap<>(currentProcCPUTime);
 		currentProcCPUTime.clear();
-		String filename;
 		for (Integer child : children) {
-			filename = "/proc/" + child + "/stat";
-			File f = new File(filename);
+			final String filename = "/proc/" + child + "/stat";
 
-			if (f.exists() && f.canRead()) {
-				try (BufferedReader br = new BufferedReader(new FileReader(f))) {
-					String s;
-					while ((s = br.readLine()) != null) {
-						String[] splitted = s.split(" ");
-						try {
-							if (splitted.length >= 15) {
-								final double procCpuTime = Double.parseDouble(splitted[13]) + Double.parseDouble(splitted[14]);
-								currentProcCPUTime.put(child, Double.valueOf(procCpuTime));
-								totalCPUTime = totalCPUTime + procCpuTime
-										- previousProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue();
-							}
-						} catch (NumberFormatException e) {
-							logger.log(Level.WARNING, "The " + filename
-									+ " file did not have the correct formatting. Omitting process accounting.\n" + e);
+			try {
+				String s = Files.readString(Path.of(filename));
+				int count, old_idx;
+				double usr, sys;
+				try {
+					int idx = s.indexOf(')');
+
+					if (idx < 0)
+						continue;
+
+					s = s.substring(idx + 2);
+					count = 0;
+					old_idx = 0;
+					usr = 0;
+					sys = 0;
+					while (count < 13) {
+						idx = s.indexOf(' ', old_idx);
+
+						if (idx < 0)
+							break;
+
+						if (count == 11) {
+							usr = Double.parseDouble(s.substring(old_idx, idx));
 						}
+						if (count == 12) {
+							sys = Double.parseDouble(s.substring(old_idx, idx));
+						}
+						count += 1;
+						old_idx = idx + 1;
 					}
 
-				} catch (IOException | IllegalArgumentException e) {
-					if (logger.isLoggable(Level.FINE))
-						logger.log(Level.FINE, "The file " + filename + " output could not be accessed. The process might have already died.\n" + e);
+					if (count < 13)
+						continue;
+
+					final double procCpuTime = usr + sys;
+					currentProcCPUTime.put(child, Double.valueOf(procCpuTime));
+					totalCPUTime = totalCPUTime + procCpuTime
+							- previousProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue();
 				}
-			} else {
+				catch (NumberFormatException e) {
+					logger.log(Level.WARNING, "The " + filename
+							+ " file did not have the correct formatting. Omitting process accounting.\n", e);
+				}
+
+			}
+			catch (IOException | IllegalArgumentException e) {
 				if (logger.isLoggable(Level.FINE))
-					logger.log(Level.FINE, "The file " + filename + " does NOT exist");
+					logger.log(Level.FINE, "The file " + filename + " output could not be accessed. The process might have already died.\n", e);
 			}
 		}
 
-		if (previousMeasureTime>0) {
+		if (previousMeasureTime > 0) {
 			long timeDiff = currentMeasureTime - previousMeasureTime;
-			registerConsumedCPUPerCommand(previousProcCPUTime, timeDiff);
-	
+
+			if (payloadMonitoring == true)
+				registerConsumedCPUPerCommand(previousProcCPUTime, timeDiff);
+
 			instantCpuEfficiency = 100000 * (((totalCPUTime - previousTotalCPUTime) / hertz) / timeDiff); // Current instantaneous efficiency
 			if (instantCpuEfficiency > 1000) {
 				logger.log(Level.WARNING, "Instantaneous CPU efficiency = "
 						+ String.format("%.2f", Double.valueOf(instantCpuEfficiency)) + " %.");
 			}
 		}
-		
+
 		cpuEfficiency = 100 * (totalCPUTime / hertz) / (elapsedtime * numCPUs); // If we want to get the average
 																				// efficiency
 		// logger.log(Level.INFO, "Average CPU efficiency = " + String.format("%.2f", Double.valueOf(cpuEfficiency)) + " %");

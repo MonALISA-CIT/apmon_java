@@ -1838,6 +1838,17 @@ public class ApMon {
 	 * @param monJob
 	 */
 	public void sendOneJobInfo(final MonitoredJob monJob) {
+		sendOneJobInfo(monJob, false);
+	}
+
+	/**
+	 * Sends an UDP datagram with job monitoring information. Works only in Linux system; on other systems it takes no
+	 * action.
+	 *
+	 * @param monJob
+	 * @param cachedData <code>true</code> to try to reuse the job data from a previous iteration
+	 */
+	public void sendOneJobInfo(final MonitoredJob monJob, final boolean cachedData) {
 		final Vector<String> paramNames = new Vector<>();
 		final Vector<Object> paramValues = new Vector<>();
 		// , valueTypes;
@@ -1847,7 +1858,7 @@ public class ApMon {
 		HashMap<Long, Double> hmJobInfo = null;
 
 		try {
-			hmJobInfo = monJob.readJobInfo();
+			hmJobInfo = monJob.readJobInfo(cachedData);
 		}
 		catch (IOException e) {
 			logger.log(Level.WARNING, "Unable to read job info for " + monJob.getPid(), e);
@@ -1862,7 +1873,7 @@ public class ApMon {
 		HashMap<Long, Double> hmJobDisk = null;
 
 		try {
-			hmJobDisk = monJob.readJobDiskUsage();
+			hmJobDisk = monJob.readJobDiskUsage(cachedData);
 		}
 		catch (Throwable t1) {
 			logger.warning("Unable to read job Disk Usage info for " + monJob.getPid() + " : " + t1 + " (" + t1.getMessage() + ")");
