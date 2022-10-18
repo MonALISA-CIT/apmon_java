@@ -249,7 +249,21 @@ public class MonitoredJob implements AutoCloseable {
 	 * @param targetPid
 	 * @return children processes
 	 */
-	private Vector<Integer> getChildren(int targetPid) {
+	private Vector<Integer> getChildren(final int targetPid) {
+		return getChildren(targetPid, exec);
+	}
+
+	/**
+	 * @param targetPid
+	 * @return all children processes of a given process ID
+	 */
+	public static Vector<Integer> getChildrenProcessIDs(final int targetPid) {
+		try (cmdExec exec = new cmdExec()) {
+			return getChildren(targetPid, exec);
+		}
+	}
+
+	private static Vector<Integer> getChildren(final int targetPid, final cmdExec exec) {
 		Vector<Integer> pids, ppids, children = null;
 		String cmd = null, result = null;
 		int nProcesses = 0, nChildren = 1;
