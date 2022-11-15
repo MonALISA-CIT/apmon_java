@@ -110,6 +110,8 @@ public class MonitoredJob implements AutoCloseable {
 	 * Synchronize updates
 	 */
 	protected static final Object requestSync = new Object();
+	
+	private long jobStartupTime = 0;
 
 	/**
 	 * @param _pid
@@ -477,6 +479,9 @@ public class MonitoredJob implements AutoCloseable {
 				}
 			}
 
+			if (jobStartupTime > 0)
+				elapsedtime = (System.currentTimeMillis() - jobStartupTime) / 1000.;
+			
 			if (elapsedtime < 0.0000001) {
 				return null;
 			}
@@ -990,5 +995,16 @@ public class MonitoredJob implements AutoCloseable {
 	 */
 	public boolean getPayloadMonitoring() {
 		return payloadMonitoring;
+	}
+	
+	/**
+	 * @param timestamp reference time when the payload / pid to monitor has started, overriding the `ps` output for this instance
+	 * @return previous job startup time
+	 */
+	public long setJobStartupTime(final long timestamp) {
+		final long oldValue = this.jobStartupTime;
+		this.jobStartupTime = timestamp;
+		
+		return oldValue;
 	}
 }
