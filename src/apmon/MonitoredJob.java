@@ -108,6 +108,9 @@ public class MonitoredJob implements AutoCloseable {
 	final HashMap<String, Double> currentCommandCPUTime;
 	final HashMap<String, Double> instantCommandCPUEfficiency;
 
+	int overConsumption;
+	int consumptionThres;
+
 	/**
 	 * Synchronize updates
 	 */
@@ -163,6 +166,8 @@ public class MonitoredJob implements AutoCloseable {
 		this.procCommands = new HashMap<>();
 		this.currentCommandCPUTime = new HashMap<>();
 		this.instantCommandCPUEfficiency = new HashMap<>();
+		this.consumptionThres = 30;
+		this.overConsumption = 0;
 	}
 
 	/**
@@ -537,6 +542,17 @@ public class MonitoredJob implements AutoCloseable {
 				}
 			}
 
+			if (overConsumption < consumptionThres) {
+				if (cpuEfficiency > 120) {
+					overConsumption += 1;
+					logger.log(Level.SEVERE,
+							"CPU Efficiency exceeding limit count increase. Current count - " + overConsumption);
+				} else if (cpuEfficiency < 120 && overConsumption > 0) {
+					overConsumption = 0;
+					logger.log(Level.INFO, "CPU Efficiency goes back to limits. Reseting count");
+				}
+			}
+
 			ret.put(ApMonMonitoringConstants.LJOB_RUN_TIME, Double.valueOf(elapsedtime * numCPUs));
 			if (isLinux)
 				ret.put(ApMonMonitoringConstants.LJOB_CPU_TIME, Double.valueOf(totalCPUTime / hertz));
@@ -894,6 +910,12 @@ public class MonitoredJob implements AutoCloseable {
 								/ timeDiff));
 			}
 		}
+	}
+
+	public boolean isOverConsuming() {
+		logger.log(Level.INFO, "DBG: Checking overcousumption. Current count - " + overConsumption);
+		logger.log(Level.INFO, "DBG: Threshold is set to " + consumptionThres);
+		return overConsumption >= consumptionThres;
 	}
 
 	/**
