@@ -39,8 +39,13 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
 import java.util.Vector;
@@ -111,6 +116,8 @@ public class MonitoredJob implements AutoCloseable {
 	int overConsumption;
 	int consumptionThres;
 
+	String errorLogs;
+
 	/**
 	 * Synchronize updates
 	 */
@@ -168,6 +175,7 @@ public class MonitoredJob implements AutoCloseable {
 		this.instantCommandCPUEfficiency = new HashMap<>();
 		this.consumptionThres = 30;
 		this.overConsumption = 0;
+		this.errorLogs = "";
 	}
 
 	/**
@@ -825,6 +833,9 @@ public class MonitoredJob implements AutoCloseable {
 	private void getCpuEfficiency(Vector<Integer> children, double elapsedtime, double previousTotalCPUTime) {
 		long currentMeasureTime = System.currentTimeMillis();
 		HashMap<Integer, Double> previousProcCPUTime = new HashMap<>(currentProcCPUTime);
+		HashMap<Integer, Double> deltaCPUTime = new HashMap<>();
+		errorLogs = "";
+
 		currentProcCPUTime.clear();
 		for (Integer child : children) {
 			final String filename = "/proc/" + child + "/stat";
@@ -864,10 +875,11 @@ public class MonitoredJob implements AutoCloseable {
 
 					final double procCpuTime = usr + sys;
 					currentProcCPUTime.put(child, Double.valueOf(procCpuTime));
-					totalCPUTime = totalCPUTime + procCpuTime
+					final double delta = procCpuTime
 							- previousProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue();
-				}
-				catch (NumberFormatException e) {
+					totalCPUTime = totalCPUTime + delta;
+					deltaCPUTime.put(child, Double.valueOf(delta));
+				} catch (NumberFormatException e) {
 					logger.log(Level.WARNING, "The " + filename
 							+ " file did not have the correct formatting. Omitting process accounting.\n", e);
 				}
@@ -879,11 +891,10 @@ public class MonitoredJob implements AutoCloseable {
 			}
 		}
 
-		if (previousMeasureTime > 0) {
-			long timeDiff = currentMeasureTime - previousMeasureTime;
+		long timeDiff = currentMeasureTime - previousMeasureTime;
+		if (previousMeasureTime > 0 && timeDiff > 0) {
 
-			if (payloadMonitoring == true)
-				registerConsumedCPUPerCommand(previousProcCPUTime, timeDiff);
+			registerCommand(previousProcCPUTime, timeDiff);
 
 			instantCpuEfficiency = 100000 * (((totalCPUTime - previousTotalCPUTime) / hertz) / timeDiff); // Current instantaneous efficiency
 
@@ -891,30 +902,75 @@ public class MonitoredJob implements AutoCloseable {
 				logger.log(Level.WARNING, "Instantaneous CPU efficiency = "
 						+ String.format("%.2f", Double.valueOf(instantCpuEfficiency)) + " %.");
 			}
+
+			if ((totalCPUTime - previousTotalCPUTime) / hertz > 5 * timeDiff * numCPUs / 1000) {
+				LinkedHashMap<Integer, Double> sortedMap = sortCPUConsumers(deltaCPUTime);
+				int counter = 0;
+				for (Integer child : sortedMap.keySet()) {
+					counter += 1;
+					errorLogs = errorLogs + "PID: " + child + ", command: " + procCommands.get(child) + ", old value: "
+							+ previousProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue() / hertz
+							+ ", new value: "
+							+ currentProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue() / hertz
+							+ ", delta CPU time: " + deltaCPUTime.get(child).doubleValue() / hertz + ", delta walltime: "
+							+ timeDiff/1000 + ", usage: "
+							+ new DecimalFormat("#.0#").format(((deltaCPUTime.get(child).doubleValue()/hertz) / (timeDiff/1000)) * 100) + "%\n";
+					if (counter >= 5)
+						break;
+				}
+			}
 		}
+
 		final double etime = (elapsedtime == 0) ? (currentMeasureTime - initialMeasureTime) / 1000 : elapsedtime;
 		cpuEfficiency = 100 * (totalCPUTime / hertz) / (etime * numCPUs); // If we want to get the average efficiency
 	}
 
-	private void registerConsumedCPUPerCommand(HashMap<Integer, Double> previousProcCPUTime, long timeDiff) {
+	private static LinkedHashMap<Integer, Double> sortCPUConsumers(HashMap<Integer, Double> deltaCPUTime) {
+		ArrayList<Double> list = new ArrayList<>();
+		LinkedHashMap<Integer, Double> sortedMap = new LinkedHashMap<>();
+		for (Entry<Integer, Double> entry : deltaCPUTime.entrySet()) {
+			list.add(entry.getValue());
+		}
+		Comparator<Double> c = new Comparator<Double>() {
+			@Override
+			public int compare(Double d1, Double d2) {
+				return Double.compare(d1.doubleValue(), d2.doubleValue());
+			}
+		};
+		Collections.sort(list, c.reversed());
+		for (Double d : list) {
+			for (Entry<Integer, Double> entry : deltaCPUTime.entrySet()) {
+				if (entry.getValue().equals(d)) {
+					sortedMap.put(entry.getKey(), d);
+				}
+			}
+		}
+		return sortedMap;
+	}
+
+	public String getErrorLogs() {
+		return errorLogs;
+	}
+
+	private void registerCommand(HashMap<Integer, Double> previousProcCPUTime, long timeDiff) {
 		String command;
 		currentCommandCPUTime.clear();
 		for (Integer pidProc : currentProcCPUTime.keySet()) {
 			checkRegisteredCommand(pidProc);
-			command = procCommands.get(pidProc);
-			if (command != null) {
-				currentCommandCPUTime.put(command, currentProcCPUTime.get(pidProc));
-				instantCommandCPUEfficiency.put(command,
-						Double.valueOf(100000 * ((currentProcCPUTime.get(pidProc).doubleValue()
-								- previousProcCPUTime.getOrDefault(pidProc, Double.valueOf(0)).doubleValue()) / hertz)
-								/ timeDiff));
+			if (payloadMonitoring == true) {
+				command = procCommands.get(pidProc);
+				if (command != null) {
+					currentCommandCPUTime.put(command, currentProcCPUTime.get(pidProc));
+					instantCommandCPUEfficiency.put(command,
+							Double.valueOf(100000 * ((currentProcCPUTime.get(pidProc).doubleValue()
+									- previousProcCPUTime.getOrDefault(pidProc, Double.valueOf(0)).doubleValue()) / hertz)
+									/ timeDiff));
+				}
 			}
 		}
 	}
 
 	public boolean isOverConsuming() {
-		logger.log(Level.INFO, "DBG: Checking overcousumption. Current count - " + overConsumption);
-		logger.log(Level.INFO, "DBG: Threshold is set to " + consumptionThres);
 		return overConsumption >= consumptionThres;
 	}
 
