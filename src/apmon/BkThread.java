@@ -678,44 +678,47 @@ public class BkThread extends Thread {
 			return null;
 
 		final Hashtable<Long, String> info = new Hashtable<>(6);
+		try {
+			final List<String> lines = Files.readAllLines(Paths.get("/proc/cpuinfo"));
 
-		final List<String> lines = Files.readAllLines(Paths.get("/proc/cpuinfo"));
+			for (final String line : lines) {
+				final int idx = line.indexOf(':');
 
-		for (final String line : lines) {
-			final int idx = line.indexOf(':');
+				if (idx <= 0)
+					continue;
 
-			if (idx <= 0)
-				continue;
+				final String key = line.substring(0, idx).trim();
+				final String value = line.substring(idx + 1).trim();
 
-			final String key = line.substring(0, idx).trim();
-			final String value = line.substring(idx + 1).trim();
+				switch (key) {
+					case "cpu MHz":
+						info.put(ApMonMonitoringConstants.LGEN_CPU_MHZ, value);
+						break;
+					case "vendor_id":
+						info.put(ApMonMonitoringConstants.LGEN_CPU_VENDOR_ID, value);
+						break;
+					case "model":
+						info.put(ApMonMonitoringConstants.LGEN_CPU_MODEL, value);
+						break;
+					case "cpu family":
+						info.put(ApMonMonitoringConstants.LGEN_CPU_FAMILY, value);
+						break;
+					case "model name":
+						info.put(ApMonMonitoringConstants.LGEN_CPU_MODEL_NAME, value);
+						break;
+					case "bogomips":
+						info.put(ApMonMonitoringConstants.LGEN_BOGOMIPS, value);
+						break;
+					default:
+						// ignore other keys
+				}
 
-			switch (key) {
-				case "cpu MHz":
-					info.put(ApMonMonitoringConstants.LGEN_CPU_MHZ, value);
+				// after the first CPU found the map is filled
+				if (info.size() == 6)
 					break;
-				case "vendor_id":
-					info.put(ApMonMonitoringConstants.LGEN_CPU_VENDOR_ID, value);
-					break;
-				case "model":
-					info.put(ApMonMonitoringConstants.LGEN_CPU_MODEL, value);
-					break;
-				case "cpu family":
-					info.put(ApMonMonitoringConstants.LGEN_CPU_FAMILY, value);
-					break;
-				case "model name":
-					info.put(ApMonMonitoringConstants.LGEN_CPU_MODEL_NAME, value);
-					break;
-				case "bogomips":
-					info.put(ApMonMonitoringConstants.LGEN_BOGOMIPS, value);
-					break;
-				default:
-					// ignore other keys
 			}
-
-			// after the first CPU found the map is filled
-			if (info.size() == 6)
-				break;
+		} catch (IllegalArgumentException e) {
+			logger.log(Level.WARNING, "Could not read /proc/cpuinfo file for fetching CPU info ", e);
 		}
 
 		return info;

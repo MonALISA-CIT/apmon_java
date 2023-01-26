@@ -103,6 +103,8 @@ public class ProcReader {
 
 	private long lastCall = 0;
 
+	private long lastCallCPU = 0;
+
 	/**
 	 * 
 	 */
@@ -185,92 +187,7 @@ public class ProcReader {
 			}
 		}
 
-		pagesIn = pagesOut = null;
-		cpuUsage = cpuUsr = cpuIdle = cpuNice = cpuSys = diskIO = null;
-		parser.parseFromFile("/proc/stat");
-		line = parser.nextLine();
-		while (line != null) {
-			if (line.startsWith("page")) {
-				line = Parser.getTextAfterToken(line, "page ");
-				parser.parseAux(line);
-				pagesIn = parser.nextAuxToken();
-				pagesOut = parser.nextAuxToken();
-				long dpIn = 0, dpOut = 0;
-				try {
-					dpIn = Long.parseLong(pagesIn);
-				}
-				catch (@SuppressWarnings("unused") Exception e) {
-					dpIn = -1;
-				}
-				try {
-					dpOut = Long.parseLong(pagesOut);
-				}
-				catch (@SuppressWarnings("unused") Exception e) {
-					dpOut = -1;
-				}
-				if (dpIn >= 0) {
-					pagesIn = "" + ((diffWithOverflowCheck(dpIn, dpagesIn)) / diffCall);
-					dpagesIn = dpIn;
-				}
-				if (dpOut >= 0) {
-					pagesOut = "" + ((diffWithOverflowCheck(dpOut, dpagesOut)) / diffCall);
-					dpagesOut = dpOut;
-				}
-			}
-			if (line.startsWith("cpu") && cpuUsr == null) {
-				line = Parser.getTextAfterToken(line, "cpu ");
-				parser.parseAux(line);
-				long dcUsr = 0, dcSys = 0, dcNice = 0, dcIdle = 0;
-				line = parser.nextAuxToken(); // cpu usr
-				try {
-					dcUsr = Long.parseLong(line);
-
-				}
-				catch (@SuppressWarnings("unused") Exception e) {
-					dcUsr = -1;
-				}
-				line = parser.nextAuxToken(); // cpu nice
-				try {
-					dcNice = Long.parseLong(line);
-				}
-				catch (@SuppressWarnings("unused") Exception e) {
-					dcNice = -1;
-				}
-				line = parser.nextAuxToken(); // cpu sys
-				try {
-					dcSys = Long.parseLong(line);
-				}
-				catch (@SuppressWarnings("unused") Exception e) {
-					dcSys = -1;
-				}
-				line = parser.nextAuxToken(); // cpu idle
-				try {
-					dcIdle = Long.parseLong(line);
-				}
-				catch (@SuppressWarnings("unused") Exception e) {
-					dcIdle = -1;
-				}
-
-				double tmpUsr = diffWithOverflowCheck(dcUsr, dcpuUsr) / diffCall;
-				double tmpSys = (diffWithOverflowCheck(dcSys, dcpuSys)) / diffCall;
-				double tmpIdle = (diffWithOverflowCheck(dcIdle, dcpuIdle)) / diffCall;
-				double tmpNice = (diffWithOverflowCheck(dcNice, dcpuNice)) / diffCall;
-				if (tmpUsr >= 0.0 && tmpSys >= 0.0 && tmpIdle >= 0.0 && tmpNice >= 0.0) {
-					dcpuUsr = dcUsr;
-					dcpuSys = dcSys;
-					dcpuNice = dcNice;
-					dcpuIdle = dcIdle;
-					double dcTotalP = tmpUsr + tmpSys + tmpNice;
-					double dcTotal = dcTotalP + tmpIdle;
-					cpuUsr = "" + (100.0 * tmpUsr / dcTotal);
-					cpuSys = "" + (100.0 * tmpSys / dcTotal);
-					cpuNice = "" + (100.0 * tmpNice / dcTotal);
-					cpuIdle = "" + (100.0 * tmpIdle / dcTotal);
-					cpuUsage = "" + (100.0 * dcTotalP / dcTotal);
-				}
-			}
-			line = parser.nextLine();
-		}
+		updateCPUComponents(true);
 
 		output = exec.executeCommandReality(System.getProperty("user.home") + "/iostat -k", "L");
 		if (exec.isError())
@@ -983,6 +900,106 @@ public class ProcReader {
 		hm.put(ApMonMonitoringConstants.LSYS_PROCESSES, processesNo);
 
 		lastCall = newCall;
+	}
+
+	public void updateCPUComponents(boolean mainLoop) {
+		long newCall = System.currentTimeMillis();
+		double diffCall = 0;
+		if (mainLoop)
+			diffCall = (newCall - lastCall) / 1000.0; // in seconds
+		else
+			diffCall = (newCall - lastCallCPU) / 1000.0; // in seconds
+		String line;
+		pagesIn = pagesOut = null;
+		cpuUsage = cpuUsr = cpuIdle = cpuNice = cpuSys = diskIO = null;
+		parser.parseFromFile("/proc/stat");
+		line = parser.nextLine();
+		while (line != null) {
+			if (line.startsWith("page")) {
+				line = Parser.getTextAfterToken(line, "page ");
+				parser.parseAux(line);
+				pagesIn = parser.nextAuxToken();
+				pagesOut = parser.nextAuxToken();
+				long dpIn = 0, dpOut = 0;
+				try {
+					dpIn = Long.parseLong(pagesIn);
+				}
+				catch (@SuppressWarnings("unused") Exception e) {
+					dpIn = -1;
+				}
+				try {
+					dpOut = Long.parseLong(pagesOut);
+				}
+				catch (@SuppressWarnings("unused") Exception e) {
+					dpOut = -1;
+				}
+				if (dpIn >= 0) {
+					pagesIn = "" + ((diffWithOverflowCheck(dpIn, dpagesIn)) / diffCall);
+					dpagesIn = dpIn;
+				}
+				if (dpOut >= 0) {
+					pagesOut = "" + ((diffWithOverflowCheck(dpOut, dpagesOut)) / diffCall);
+					dpagesOut = dpOut;
+				}
+			}
+			if (line.startsWith("cpu") && cpuUsr == null) {
+				line = Parser.getTextAfterToken(line, "cpu ");
+				parser.parseAux(line);
+				long dcUsr = 0, dcSys = 0, dcNice = 0, dcIdle = 0;
+				line = parser.nextAuxToken(); // cpu usr
+				try {
+					dcUsr = Long.parseLong(line);
+
+				}
+				catch (@SuppressWarnings("unused") Exception e) {
+					dcUsr = -1;
+				}
+				line = parser.nextAuxToken(); // cpu nice
+				try {
+					dcNice = Long.parseLong(line);
+				}
+				catch (@SuppressWarnings("unused") Exception e) {
+					dcNice = -1;
+				}
+				line = parser.nextAuxToken(); // cpu sys
+				try {
+					dcSys = Long.parseLong(line);
+				}
+				catch (@SuppressWarnings("unused") Exception e) {
+					dcSys = -1;
+				}
+				line = parser.nextAuxToken(); // cpu idle
+				try {
+					dcIdle = Long.parseLong(line);
+				}
+				catch (@SuppressWarnings("unused") Exception e) {
+					dcIdle = -1;
+				}
+
+				double tmpUsr = diffWithOverflowCheck(dcUsr, dcpuUsr) / diffCall;
+				double tmpSys = (diffWithOverflowCheck(dcSys, dcpuSys)) / diffCall;
+				double tmpIdle = (diffWithOverflowCheck(dcIdle, dcpuIdle)) / diffCall;
+				double tmpNice = (diffWithOverflowCheck(dcNice, dcpuNice)) / diffCall;
+				if (tmpUsr >= 0.0 && tmpSys >= 0.0 && tmpIdle >= 0.0 && tmpNice >= 0.0) {
+					dcpuUsr = dcUsr;
+					dcpuSys = dcSys;
+					dcpuNice = dcNice;
+					dcpuIdle = dcIdle;
+					double dcTotalP = tmpUsr + tmpSys + tmpNice;
+					double dcTotal = dcTotalP + tmpIdle;
+					cpuUsr = "" + (100.0 * tmpUsr / dcTotal);
+					cpuSys = "" + (100.0 * tmpSys / dcTotal);
+					cpuNice = "" + (100.0 * tmpNice / dcTotal);
+					cpuIdle = "" + (100.0 * tmpIdle / dcTotal);
+					cpuUsage = "" + (100.0 * dcTotalP / dcTotal);
+
+					//System.out.println("DBG: Updated reader. cpuIdle = " + cpuIdle + ". dcTotal = " + dcTotal + ". tmpIdle = " + tmpIdle);
+				}
+			}
+			line = parser.nextLine();
+		}
+		if (!mainLoop)
+			lastCallCPU = newCall;
 	}
 
 	/**

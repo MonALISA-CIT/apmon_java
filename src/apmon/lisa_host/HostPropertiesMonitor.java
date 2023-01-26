@@ -56,12 +56,12 @@ public class HostPropertiesMonitor {
 	/**
 	 * update
 	 */
-	public native void update();
+	public static native void update();
 
 	/**
 	 * update
 	 */
-	public void updateCall() {
+	public static void updateCall() {
 
 		if (osName.indexOf("Linux") != -1) {
 			reader.update();
@@ -72,6 +72,16 @@ public class HostPropertiesMonitor {
 			return;
 		}
 		update();
+	}
+
+	/**
+	 * update CPU
+	 */
+	public static void updateCPU() {
+		if (osName.indexOf("Linux") != -1) {
+			reader.updateCPUComponents(false);
+			return;
+		}
 	}
 
 	/**
@@ -150,12 +160,12 @@ public class HostPropertiesMonitor {
 	/**
 	 * @return cpu idle
 	 */
-	public native String getCpuIDLE();
+	public static native String getCpuIDLE();
 
 	/**
 	 * @return cpu idle
 	 */
-	public String getCpuIDLECall() {
+	public static String getCpuIDLECall() {
 
 		if (osName.indexOf("Linux") != -1) {
 			return reader.getCPUIdle();

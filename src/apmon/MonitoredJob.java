@@ -39,13 +39,20 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
 import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.PatternSyntaxException;
 
 import apmon.lisa_host.cmdExec;
 
@@ -90,6 +97,7 @@ public class MonitoredJob implements AutoCloseable {
 	final HashMap<String, Double> nonvoluntaryCS;
 	double totalCPUTime;
 	long previousMeasureTime;
+	long initialMeasureTime;
 	double totalVoluntaryContextSwitches;
 	double totalNonVoluntaryContextSwitches;
 	final HashMap<String, Double> countStats;
@@ -105,6 +113,11 @@ public class MonitoredJob implements AutoCloseable {
 	final HashMap<Integer, String> procCommands;
 	final HashMap<String, Double> currentCommandCPUTime;
 	final HashMap<String, Double> instantCommandCPUEfficiency;
+
+	int overConsumption;
+	int consumptionThres;
+
+	String errorLogs;
 
 	/**
 	 * Synchronize updates
@@ -161,6 +174,9 @@ public class MonitoredJob implements AutoCloseable {
 		this.procCommands = new HashMap<>();
 		this.currentCommandCPUTime = new HashMap<>();
 		this.instantCommandCPUEfficiency = new HashMap<>();
+		this.consumptionThres = 30;
+		this.overConsumption = 0;
+		this.errorLogs = "";
 	}
 
 	/**
@@ -535,6 +551,17 @@ public class MonitoredJob implements AutoCloseable {
 				}
 			}
 
+			if (overConsumption < consumptionThres) {
+				if (cpuEfficiency > 120) {
+					overConsumption += 1;
+					logger.log(Level.SEVERE,
+							"CPU Efficiency exceeding limit count increase. Current count - " + overConsumption);
+				} else if (cpuEfficiency < 120 && overConsumption > 0) {
+					overConsumption = 0;
+					logger.log(Level.INFO, "CPU Efficiency goes back to limits. Reseting count");
+				}
+			}
+
 			ret.put(ApMonMonitoringConstants.LJOB_RUN_TIME, Double.valueOf(elapsedtime * numCPUs));
 			if (isLinux)
 				ret.put(ApMonMonitoringConstants.LJOB_CPU_TIME, Double.valueOf(totalCPUTime / hertz));
@@ -807,10 +834,12 @@ public class MonitoredJob implements AutoCloseable {
 	private void getCpuEfficiency(Vector<Integer> children, double elapsedtime, double previousTotalCPUTime) {
 		long currentMeasureTime = System.currentTimeMillis();
 		HashMap<Integer, Double> previousProcCPUTime = new HashMap<>(currentProcCPUTime);
+		HashMap<Integer, Double> deltaCPUTime = new HashMap<>();
+		errorLogs = "";
+
 		currentProcCPUTime.clear();
 		for (Integer child : children) {
 			final String filename = "/proc/" + child + "/stat";
-
 			try {
 				String s = Files.readString(Path.of(filename));
 				int count, old_idx;
@@ -847,10 +876,11 @@ public class MonitoredJob implements AutoCloseable {
 
 					final double procCpuTime = usr + sys;
 					currentProcCPUTime.put(child, Double.valueOf(procCpuTime));
-					totalCPUTime = totalCPUTime + procCpuTime
+					final double delta = procCpuTime
 							- previousProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue();
-				}
-				catch (NumberFormatException e) {
+					totalCPUTime = totalCPUTime + delta;
+					deltaCPUTime.put(child, Double.valueOf(delta));
+				} catch (NumberFormatException e) {
 					logger.log(Level.WARNING, "The " + filename
 							+ " file did not have the correct formatting. Omitting process accounting.\n", e);
 				}
@@ -862,38 +892,72 @@ public class MonitoredJob implements AutoCloseable {
 			}
 		}
 
-		if (previousMeasureTime > 0) {
-			long timeDiff = currentMeasureTime - previousMeasureTime;
+		long timeDiff = currentMeasureTime - previousMeasureTime;
+		if (previousMeasureTime > 0 && timeDiff > 0) {
 
-			if (payloadMonitoring == true)
-				registerConsumedCPUPerCommand(previousProcCPUTime, timeDiff);
+			registerCommand(previousProcCPUTime, timeDiff);
 
 			instantCpuEfficiency = 100000 * (((totalCPUTime - previousTotalCPUTime) / hertz) / timeDiff); // Current instantaneous efficiency
+
 			if (instantCpuEfficiency > 1000) {
 				logger.log(Level.WARNING, "Instantaneous CPU efficiency = "
 						+ String.format("%.2f", Double.valueOf(instantCpuEfficiency)) + " %.");
 			}
+
+			if ((totalCPUTime - previousTotalCPUTime) / hertz > 5 * timeDiff * numCPUs / 1000) {
+				LinkedHashMap<Integer, Double> sortedMap = sortCPUConsumers(deltaCPUTime);
+				int counter = 0;
+				for (Integer child : sortedMap.keySet()) {
+					counter += 1;
+					errorLogs = errorLogs + "PID: " + child + ", command: " + procCommands.get(child) + ", old value: "
+							+ previousProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue() / hertz
+							+ ", new value: "
+							+ currentProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue() / hertz
+							+ ", delta CPU time: " + deltaCPUTime.get(child).doubleValue() / hertz + ", delta walltime: "
+							+ timeDiff/1000 + ", usage: "
+							+ new DecimalFormat("#.0#").format(((deltaCPUTime.get(child).doubleValue()/hertz) / (timeDiff/1000)) * 100) + "%\n";
+					if (counter >= 5)
+						break;
+				}
+			}
 		}
 
-		cpuEfficiency = 100 * (totalCPUTime / hertz) / (elapsedtime * numCPUs); // If we want to get the average
-																				// efficiency
-		// logger.log(Level.INFO, "Average CPU efficiency = " + String.format("%.2f", Double.valueOf(cpuEfficiency)) + " %");
+		final double etime = (elapsedtime == 0) ? (currentMeasureTime - initialMeasureTime) / 1000 : elapsedtime;
+		cpuEfficiency = 100 * (totalCPUTime / hertz) / (etime * numCPUs); // If we want to get the average efficiency
 	}
 
-	private void registerConsumedCPUPerCommand(HashMap<Integer, Double> previousProcCPUTime, long timeDiff) {
+	private static LinkedHashMap<Integer, Double> sortCPUConsumers(Map<Integer, Double> deltaCPUTime) {
+		final LinkedHashMap<Integer, Double> sortedMap = new LinkedHashMap<>(deltaCPUTime.size());
+
+		deltaCPUTime.entrySet().stream().sorted((a, b) -> b.getValue().compareTo(a.getValue())).forEach(e -> sortedMap.put(e.getKey(), e.getValue()));
+
+		return sortedMap;
+	}
+
+	public String getErrorLogs() {
+		return errorLogs;
+	}
+
+	private void registerCommand(HashMap<Integer, Double> previousProcCPUTime, long timeDiff) {
 		String command;
 		currentCommandCPUTime.clear();
 		for (Integer pidProc : currentProcCPUTime.keySet()) {
 			checkRegisteredCommand(pidProc);
-			command = procCommands.get(pidProc);
-			if (command != null) {
-				currentCommandCPUTime.put(command, currentProcCPUTime.get(pidProc));
-				instantCommandCPUEfficiency.put(command,
-						Double.valueOf(100000 * ((currentProcCPUTime.get(pidProc).doubleValue()
-								- previousProcCPUTime.getOrDefault(pidProc, Double.valueOf(0)).doubleValue()) / hertz)
-								/ timeDiff));
+			if (payloadMonitoring == true) {
+				command = procCommands.get(pidProc);
+				if (command != null) {
+					currentCommandCPUTime.put(command, currentProcCPUTime.get(pidProc));
+					instantCommandCPUEfficiency.put(command,
+							Double.valueOf(100000 * ((currentProcCPUTime.get(pidProc).doubleValue()
+									- previousProcCPUTime.getOrDefault(pidProc, Double.valueOf(0)).doubleValue()) / hertz)
+									/ timeDiff));
+				}
 			}
 		}
+	}
+
+	public boolean isOverConsuming() {
+		return overConsumption >= consumptionThres;
 	}
 
 	/**
@@ -983,7 +1047,7 @@ public class MonitoredJob implements AutoCloseable {
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	public void setPayloadMonitoring() {
 		payloadMonitoring = true;

@@ -1742,6 +1742,14 @@ public class ApMon {
 		return val;
 	}
 
+	public static void updateCPUComponents() {
+		HostPropertiesMonitor.updateCPU();
+	}
+
+	public static String getIdleCPU() {
+		return HostPropertiesMonitor.getCpuIDLECall();
+	}
+
 	/**
 	 * @param paramName
 	 * @return the value
