@@ -45,6 +45,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
@@ -925,26 +926,11 @@ public class MonitoredJob implements AutoCloseable {
 		cpuEfficiency = 100 * (totalCPUTime / hertz) / (etime * numCPUs); // If we want to get the average efficiency
 	}
 
-	private static LinkedHashMap<Integer, Double> sortCPUConsumers(HashMap<Integer, Double> deltaCPUTime) {
-		ArrayList<Double> list = new ArrayList<>();
-		LinkedHashMap<Integer, Double> sortedMap = new LinkedHashMap<>();
-		for (Entry<Integer, Double> entry : deltaCPUTime.entrySet()) {
-			list.add(entry.getValue());
-		}
-		Comparator<Double> c = new Comparator<Double>() {
-			@Override
-			public int compare(Double d1, Double d2) {
-				return Double.compare(d1.doubleValue(), d2.doubleValue());
-			}
-		};
-		Collections.sort(list, c.reversed());
-		for (Double d : list) {
-			for (Entry<Integer, Double> entry : deltaCPUTime.entrySet()) {
-				if (entry.getValue().equals(d)) {
-					sortedMap.put(entry.getKey(), d);
-				}
-			}
-		}
+	private static LinkedHashMap<Integer, Double> sortCPUConsumers(Map<Integer, Double> deltaCPUTime) {
+		final LinkedHashMap<Integer, Double> sortedMap = new LinkedHashMap<>(deltaCPUTime.size());
+
+		deltaCPUTime.entrySet().stream().sorted((a, b) -> b.getValue().compareTo(a.getValue())).forEach(e -> sortedMap.put(e.getKey(), e.getValue()));
+
 		return sortedMap;
 	}
 
