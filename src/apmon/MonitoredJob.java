@@ -41,18 +41,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
 import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.regex.PatternSyntaxException;
 
 import apmon.lisa_host.cmdExec;
 
@@ -123,7 +119,7 @@ public class MonitoredJob implements AutoCloseable {
 	 * Synchronize updates
 	 */
 	protected static final Object requestSync = new Object();
-	
+
 	private long jobStartupTime = 0;
 
 	/**
@@ -497,7 +493,7 @@ public class MonitoredJob implements AutoCloseable {
 
 			if (jobStartupTime > 0)
 				elapsedtime = (System.currentTimeMillis() - jobStartupTime) / 1000.;
-			
+
 			if (elapsedtime < 0.0000001) {
 				return null;
 			}
@@ -556,10 +552,12 @@ public class MonitoredJob implements AutoCloseable {
 					overConsumption += 1;
 					logger.log(Level.SEVERE,
 							"CPU Efficiency exceeding limit count increase. Current count - " + overConsumption);
-				} else if (cpuEfficiency < 120 && overConsumption > 0) {
-					overConsumption = 0;
-					logger.log(Level.INFO, "CPU Efficiency goes back to limits. Reseting count");
 				}
+				else
+					if (cpuEfficiency < 120 && overConsumption > 0) {
+						overConsumption = 0;
+						logger.log(Level.INFO, "CPU Efficiency goes back to limits. Reseting count");
+					}
 			}
 
 			ret.put(ApMonMonitoringConstants.LJOB_RUN_TIME, Double.valueOf(elapsedtime * numCPUs));
@@ -841,46 +839,29 @@ public class MonitoredJob implements AutoCloseable {
 		for (Integer child : children) {
 			final String filename = "/proc/" + child + "/stat";
 			try {
-				String s = Files.readString(Path.of(filename));
-				int count, old_idx;
-				double usr, sys;
+				final String s = Files.readString(Path.of(filename));
 				try {
-					int idx = s.indexOf(')');
+					int idx = s.lastIndexOf(')');
 
 					if (idx < 0)
 						continue;
 
-					s = s.substring(idx + 2);
-					count = 0;
-					old_idx = 0;
-					usr = 0;
-					sys = 0;
-					while (count < 13) {
-						idx = s.indexOf(' ', old_idx);
+					final StringTokenizer st = new StringTokenizer(s.substring(idx + 3));
 
-						if (idx < 0)
-							break;
-
-						if (count == 11) {
-							usr = Double.parseDouble(s.substring(old_idx, idx));
-						}
-						if (count == 12) {
-							sys = Double.parseDouble(s.substring(old_idx, idx));
-						}
-						count += 1;
-						old_idx = idx + 1;
-					}
-
-					if (count < 13)
+					if (st.countTokens() < 13)
 						continue;
 
-					final double procCpuTime = usr + sys;
+					for (int i = 0; i < 10; i++)
+						st.nextToken();
+
+					final double procCpuTime = Double.parseDouble(st.nextToken()) + Double.parseDouble(st.nextToken());
 					currentProcCPUTime.put(child, Double.valueOf(procCpuTime));
 					final double delta = procCpuTime
 							- previousProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue();
 					totalCPUTime = totalCPUTime + delta;
 					deltaCPUTime.put(child, Double.valueOf(delta));
-				} catch (NumberFormatException e) {
+				}
+				catch (NumberFormatException e) {
 					logger.log(Level.WARNING, "The " + filename
 							+ " file did not have the correct formatting. Omitting process accounting.\n", e);
 				}
@@ -914,8 +895,8 @@ public class MonitoredJob implements AutoCloseable {
 							+ ", new value: "
 							+ currentProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue() / hertz
 							+ ", delta CPU time: " + deltaCPUTime.get(child).doubleValue() / hertz + ", delta walltime: "
-							+ timeDiff/1000 + ", usage: "
-							+ new DecimalFormat("#.0#").format(((deltaCPUTime.get(child).doubleValue()/hertz) / (timeDiff/1000)) * 100) + "%\n";
+							+ timeDiff / 1000 + ", usage: "
+							+ new DecimalFormat("#.0#").format(((deltaCPUTime.get(child).doubleValue() / hertz) / (timeDiff / 1000)) * 100) + "%\n";
 					if (counter >= 5)
 						break;
 				}
@@ -1060,7 +1041,7 @@ public class MonitoredJob implements AutoCloseable {
 	public boolean getPayloadMonitoring() {
 		return payloadMonitoring;
 	}
-	
+
 	/**
 	 * @param timestamp reference time when the payload / pid to monitor has started, overriding the `ps` output for this instance
 	 * @return previous job startup time
@@ -1068,7 +1049,7 @@ public class MonitoredJob implements AutoCloseable {
 	public long setJobStartupTime(final long timestamp) {
 		final long oldValue = this.jobStartupTime;
 		this.jobStartupTime = timestamp;
-		
+
 		return oldValue;
 	}
 }
