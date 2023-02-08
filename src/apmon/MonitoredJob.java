@@ -858,8 +858,15 @@ public class MonitoredJob implements AutoCloseable {
 					currentProcCPUTime.put(child, Double.valueOf(procCpuTime));
 					final double delta = procCpuTime
 							- previousProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue();
-					totalCPUTime = totalCPUTime + delta;
-					deltaCPUTime.put(child, Double.valueOf(delta));
+
+					long timeDiff = currentMeasureTime - previousMeasureTime;
+					if (timeDiff > 0 && (delta / hertz < numCPUs * timeDiff * 5 / 1000 || delta < 200 * hertz)) {
+						totalCPUTime = totalCPUTime + delta;
+						deltaCPUTime.put(child, Double.valueOf(delta));
+					} else {
+						errorLogs = errorLogs + "Discarding measure. Delta CPU time: " + delta + " from entry " + s + "\n";
+						logger.log(Level.INFO, errorLogs);
+					}
 				}
 				catch (NumberFormatException e) {
 					logger.log(Level.WARNING, "The " + filename
