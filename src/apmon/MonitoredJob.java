@@ -892,7 +892,7 @@ public class MonitoredJob implements AutoCloseable {
 						+ String.format("%.2f", Double.valueOf(instantCpuEfficiency)) + " %.");
 			}
 
-			if ((totalCPUTime - previousTotalCPUTime) / hertz > 5 * timeDiff * numCPUs / 1000) {
+			if (timeDiff / 1000 > 0 && (totalCPUTime - previousTotalCPUTime) / hertz > 5 * timeDiff * numCPUs / 1000) {
 				LinkedHashMap<Integer, Double> sortedMap = sortCPUConsumers(deltaCPUTime);
 				int counter = 0;
 				for (Integer child : sortedMap.keySet()) {
