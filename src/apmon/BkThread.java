@@ -726,7 +726,8 @@ public class BkThread extends Thread {
 				try (BufferedReader br = new BufferedReader(new StringReader(content))) {
 					String s;
 					if ((s = br.readLine()) != null) {
-						info.put(ApMonMonitoringConstants.LGEN_CPU_MHZ, s);
+						double frequencyMHz = Double.parseDouble(s) / 1000;
+						info.put(ApMonMonitoringConstants.LGEN_CPU_MHZ, String.valueOf(frequencyMHz));
 					}
 				}
 			}
@@ -747,7 +748,7 @@ public class BkThread extends Thread {
 			}
 
 
-		} catch (IllegalArgumentException | FileNotFoundException e) {
+		} catch (IllegalArgumentException | IOException e) {
 			logger.log(Level.WARNING, "Could not read /proc/cpuinfo file for fetching CPU info ", e);
 		}
 
