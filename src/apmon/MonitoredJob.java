@@ -509,9 +509,17 @@ public class MonitoredJob implements AutoCloseable {
 
 			double pssKB = 0;
 			double swapPssKB = 0;
+			ArrayList<String> listSmap = new ArrayList<>();
+			listSmap.add("smaps_rollup");
+			listSmap.add("smaps");
+
+			String smapsToParse = "smaps_rollup";
+			if (!Files.exists(Path.of("/proc/" + children.get(0) + "/smaps_rollup")))
+				smapsToParse = "smaps";
+
 			for (final Integer child : children) {
 				try {
-					final String content = Files.readString(Path.of("/proc/" + child + "/smaps"));
+					final String content = Files.readString(Path.of("/proc/" + child + "/" + smapsToParse));
 
 					try (BufferedReader br = new BufferedReader(new StringReader(content))) {
 						String s;

@@ -34,11 +34,14 @@ package apmon;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.StringReader;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Date;
 import java.util.Enumeration;
@@ -687,11 +690,10 @@ public class BkThread extends Thread {
 				if (idx <= 0)
 					continue;
 
-				final String key = line.substring(0, idx).trim();
+				final String key = line.substring(0, idx).trim().toLowerCase();
 				final String value = line.substring(idx + 1).trim();
-
 				switch (key) {
-					case "cpu MHz":
+					case "cpu mhz":
 						info.put(ApMonMonitoringConstants.LGEN_CPU_MHZ, value);
 						break;
 					case "vendor_id":
@@ -700,6 +702,7 @@ public class BkThread extends Thread {
 					case "model":
 						info.put(ApMonMonitoringConstants.LGEN_CPU_MODEL, value);
 						break;
+					case "cpu architecture":
 					case "cpu family":
 						info.put(ApMonMonitoringConstants.LGEN_CPU_FAMILY, value);
 						break;
@@ -717,7 +720,34 @@ public class BkThread extends Thread {
 				if (info.size() == 6)
 					break;
 			}
-		} catch (IllegalArgumentException e) {
+			if (info.get(ApMonMonitoringConstants.LGEN_CPU_MHZ) == null) {
+				final String content = Files.readString(Path.of("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"));
+
+				try (BufferedReader br = new BufferedReader(new StringReader(content))) {
+					String s;
+					if ((s = br.readLine()) != null) {
+						info.put(ApMonMonitoringConstants.LGEN_CPU_MHZ, s);
+					}
+				}
+			}
+			// /proc/device-tree will just be in ARM systems
+			if (info.get(ApMonMonitoringConstants.LGEN_CPU_MODEL_NAME) == null) {
+				final String content = Files.readString(Path.of("/proc/device-tree/model"));
+
+				try (BufferedReader br = new BufferedReader(new StringReader(content))) {
+					String s;
+					if ((s = br.readLine()) != null) {
+						info.put(ApMonMonitoringConstants.LGEN_CPU_MODEL_NAME, s);
+					}
+					info.put(ApMonMonitoringConstants.LGEN_CPU_VENDOR_ID, "ARM");
+				}
+			}
+			if (info.get(ApMonMonitoringConstants.LGEN_CPU_MODEL) == null) {
+				info.put(ApMonMonitoringConstants.LGEN_CPU_MODEL, String.valueOf(0));
+			}
+
+
+		} catch (IllegalArgumentException | FileNotFoundException e) {
 			logger.log(Level.WARNING, "Could not read /proc/cpuinfo file for fetching CPU info ", e);
 		}
 
