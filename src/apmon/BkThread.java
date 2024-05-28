@@ -748,8 +748,8 @@ public class BkThread extends Thread {
 			}
 
 
-		} catch (IllegalArgumentException | IOException e) {
-			logger.log(Level.WARNING, "Could not read /proc/cpuinfo file for fetching CPU info ", e);
+		} catch (@SuppressWarnings("unused") IllegalArgumentException | IOException e) {
+			logger.log(Level.WARNING, "Could not read /proc/cpuinfo file for fetching CPU info ");
 		}
 
 		return info;
