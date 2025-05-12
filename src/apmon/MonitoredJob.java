@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -51,6 +52,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import apmon.lisa_host.cmdExec;
+import apmon.lisa_host.HostPropertiesMonitor;
 
 /**
  * @author ML team
@@ -115,6 +117,8 @@ public class MonitoredJob implements AutoCloseable {
 
 	String errorLogs;
 
+	String cgroup;
+
 	/**
 	 * Synchronize updates
 	 */
@@ -173,6 +177,20 @@ public class MonitoredJob implements AutoCloseable {
 		this.consumptionThres = 30;
 		this.overConsumption = 0;
 		this.errorLogs = "";
+		File fCgroup = new File("/proc/" + pid + "/cgroup");
+		if (fCgroup.exists() && fCgroup.canRead()) {
+			String s;
+			try (BufferedReader br = new BufferedReader(new FileReader(fCgroup))) {
+				if ((s = br.readLine()) != null) {
+					if (s.contains("JobAgent_") || s.contains("runner")) {
+						this.cgroup = s.split(":")[2];
+					}
+				}
+			}
+			catch ( IOException e) {
+				logger.log(Level.INFO, "Could not read process cgroup file ", e);
+			}
+		}
 	}
 
 	/**
@@ -374,8 +392,8 @@ public class MonitoredJob implements AutoCloseable {
 	 * @return job monitoring
 	 * @throws IOException
 	 */
-	public HashMap<Long, Double> readJobInfo() throws IOException {
-		return readJobInfo(false);
+	public HashMap<Long, Double> readJobInfo(boolean detailedCPUMonitoring) throws IOException {
+		return readJobInfo(false, detailedCPUMonitoring);
 	}
 
 	private HashMap<Long, Double> cachedJobInfo = null;
@@ -385,7 +403,7 @@ public class MonitoredJob implements AutoCloseable {
 	 * @return job monitoring
 	 * @throws IOException
 	 */
-	public HashMap<Long, Double> readJobInfo(final boolean cachedData) throws IOException {
+	public HashMap<Long, Double> readJobInfo(final boolean cachedData, boolean detailedCPUMonitoring) throws IOException {
 		if (cachedData && cachedJobInfo != null)
 			return cachedJobInfo;
 
@@ -416,78 +434,102 @@ public class MonitoredJob implements AutoCloseable {
 
 		synchronized (requestSync) {
 			/* get the list of the process' descendants */
-			final Vector<Integer> children = getChildren(pid);
+			Vector<Integer> children = new Vector<>();
+			final Vector<Integer> threads = new Vector<>();
+
+			if (this.cgroup != null) {
+				 Files.lines(Paths.get("/sys/fs/cgroup/" + cgroup + "/cgroup.procs")).map(String::trim).filter(process -> !process.isEmpty()).map(Integer::parseInt).forEach(children::add);
+				 Files.lines(Paths.get("/sys/fs/cgroup/" + cgroup + "/cgroup.threads")).map(String::trim).filter(thread -> !thread.isEmpty()).map(Integer::parseInt).forEach(threads::add);
+			} else {
+				children = getChildren(pid);
+			}
 
 			if (children == null)
 				return null;
 
 			logger.fine("Number of children for process " + pid + ": " + children.size());
 
-			/* issue the "ps" command to obtain information on all the descendants */
-			final StringBuilder cmd = new StringBuilder("ps -p ");
-			for (i = 0; i < children.size(); i++) {
-				if (i > 0)
-					cmd.append(',');
-				cmd.append(children.elementAt(i));
-			}
-
-			if (isLinux)
-				cmd.append(" -o pid,etime,%mem,rss,vsz,comm");
-			else {
-				cmd.append(" -o pid,etime,time,%cpu,%mem,rss,vsz,comm");
-				totalCPUTime = 0.0;
-				cpuEfficiency = 0.0;
-			}
-
-			result = exec.executeCommandReality(cmd.toString(), "");
-
-			// skip over the first line of the `ps` output
-			int idx = result.indexOf('\n');
-
-			if (idx > 0)
-				result = result.substring(idx + 1);
 
 			double previousTotalCPUTime = totalCPUTime;
 			long currentMeasureTime = System.currentTimeMillis();
-			StringTokenizer rst = new StringTokenizer(result, "\n");
-			while (rst.hasMoreTokens()) {
-				line = rst.nextToken();
-				try {
-					StringTokenizer st = new StringTokenizer(line, " \t");
 
-					apid = Long.parseLong(st.nextToken());
-					_etime = parsePSTime(st.nextToken());
-					if (pid == apid)
-						elapsedtime = _etime;
-
-					if (!isLinux) {
-						_cputime = parsePSTime(st.nextToken());
-						totalCPUTime += _cputime;
-						_pcpu = Double.parseDouble(st.nextToken());
-						cpuEfficiency += _pcpu;
-					}
-					_pmem = Double.parseDouble(st.nextToken());
-					_rsz = Double.parseDouble(st.nextToken());
-					_vsz = Double.parseDouble(st.nextToken());
-					String cmdName = st.nextToken();
-
-					etime = etime > _etime ? etime : _etime;
-
-					String mem_cmd_s = "" + _rsz + "_" + _vsz + "_" + cmdName;
-					// mem_cmd_list.add(mem_cmd_s);
-					if (mem_cmd_list.indexOf(mem_cmd_s) == -1) {
-						pmem += _pmem;
-						vsz += _vsz;
-						rsz += _rsz;
-						mem_cmd_list.add(mem_cmd_s);
-						long _fd = countOpenFD(apid);
+			if (children.size() > 0) {
+				if (cgroup != null) {
+					String stat = Files.readString(Paths.get("/proc/" + pid + "/stat"));
+					long startTicks = Long.parseLong(stat.split(" ")[21]);
+					double uptimeSeconds = Double.parseDouble(Files.readString(Paths.get("/proc/uptime")).split(" ")[0]);
+					elapsedtime = uptimeSeconds - (startTicks / (double) hertz);
+					for (Integer child : children) {
+						long _fd = countOpenFD(child.longValue());
 						if (_fd != -1)
 							fd += _fd;
 					}
-				}
-				catch (final Exception e) {
-					System.err.println("Exception parsing line `" + line + "` of the output of `" + cmd + "`: " + e.getMessage());
-					e.printStackTrace();
+				} else {
+					/* issue the "ps" command to obtain information on all the descendants */
+					final StringBuilder cmd = new StringBuilder("ps -p ");
+					for (i = 0; i < children.size(); i++) {
+						if (i > 0)
+							cmd.append(',');
+						cmd.append(children.elementAt(i));
+					}
+
+					if (isLinux)
+						cmd.append(" -o pid,etime,%mem,rss,vsz,comm");
+					else {
+						cmd.append(" -o pid,etime,time,%cpu,%mem,rss,vsz,comm");
+						totalCPUTime = 0.0;
+						cpuEfficiency = 0.0;
+					}
+
+					result = exec.executeCommandReality(cmd.toString(), "");
+
+					// skip over the first line of the `ps` output
+					int idx = result.indexOf('\n');
+
+					if (idx > 0)
+						result = result.substring(idx + 1);
+
+					StringTokenizer rst = new StringTokenizer(result, "\n");
+					while (rst.hasMoreTokens()) {
+						line = rst.nextToken();
+						try {
+							StringTokenizer st = new StringTokenizer(line, " \t");
+
+							apid = Long.parseLong(st.nextToken());
+							_etime = parsePSTime(st.nextToken());
+							if (pid == apid)
+								elapsedtime = _etime;
+
+							if (!isLinux) {
+								_cputime = parsePSTime(st.nextToken());
+								totalCPUTime += _cputime;
+								_pcpu = Double.parseDouble(st.nextToken());
+								cpuEfficiency += _pcpu;
+							}
+							_pmem = Double.parseDouble(st.nextToken());
+							_rsz = Double.parseDouble(st.nextToken());
+							_vsz = Double.parseDouble(st.nextToken());
+							String cmdName = st.nextToken();
+
+							etime = etime > _etime ? etime : _etime;
+
+							String mem_cmd_s = "" + _rsz + "_" + _vsz + "_" + cmdName;
+							// mem_cmd_list.add(mem_cmd_s);
+							if (mem_cmd_list.indexOf(mem_cmd_s) == -1) {
+								pmem += _pmem;
+								vsz += _vsz;
+								rsz += _rsz;
+								mem_cmd_list.add(mem_cmd_s);
+								long _fd = countOpenFD(apid);
+								if (_fd != -1)
+									fd += _fd;
+							}
+						}
+						catch (final Exception e) {
+							System.err.println("Exception parsing line `" + line + "` of the output of `" + cmd + "`: " + e.getMessage());
+							e.printStackTrace();
+						}
+					}
 				}
 			}
 
@@ -499,7 +541,7 @@ public class MonitoredJob implements AutoCloseable {
 			}
 
 			if (isLinux)
-				getCpuEfficiency(children, elapsedtime, previousTotalCPUTime);
+				getCpuEfficiency(children, elapsedtime, previousTotalCPUTime, detailedCPUMonitoring);
 			else {
 				if (previousMeasureTime > 0 && (totalCPUTime - previousTotalCPUTime) > 0)
 					instantCpuEfficiency = 100000 * (totalCPUTime - previousTotalCPUTime) / (currentMeasureTime - previousMeasureTime);
@@ -509,52 +551,73 @@ public class MonitoredJob implements AutoCloseable {
 
 			double pssKB = 0;
 			double swapPssKB = 0;
-			ArrayList<String> listSmap = new ArrayList<>();
-			listSmap.add("smaps_rollup");
-			listSmap.add("smaps");
 
-			String smapsToParse = "smaps_rollup";
-			if (!Files.exists(Path.of("/proc/" + children.get(0) + "/smaps_rollup")))
-				smapsToParse = "smaps";
+			if (cgroup != null) {
+				File fMemory = new File("/sys/fs/cgroup/" + cgroup + "/memory.current");
+				if (fMemory.exists() && fMemory.canRead()) {
+					String s;
+					try (BufferedReader br = new BufferedReader(new FileReader(fMemory))) {
+						if ((s = br.readLine()) != null) {
+							pssKB = Long.valueOf(s).longValue() / 1024;
+						}
+					}
+				}
+				File fSwap = new File("/sys/fs/cgroup" + cgroup + "/memory.swap.current");
+				if (fSwap.exists() && fSwap.canRead()) {
+					String s;
+					try (BufferedReader br = new BufferedReader(new FileReader(fSwap))) {
+						if ((s = br.readLine()) != null) {
+							swapPssKB = Long.valueOf(s).longValue() / 1024;
+						}
+					}
+				}
+				Double tm = Double.valueOf(HostPropertiesMonitor.getMemTotalCall());
+				pmem = pssKB / tm.doubleValue() * 100;
+				vsz = swapPssKB + pssKB;
+				rsz = pssKB;
+			} else {
+				String smapsToParse = "smaps_rollup";
+				if (!Files.exists(Path.of("/proc/" + children.get(0) + "/smaps_rollup")))
+					smapsToParse = "smaps";
 
-			for (final Integer child : children) {
-				try {
-					final String content = Files.readString(Path.of("/proc/" + child + "/" + smapsToParse));
+				for (final Integer child : children) {
+					try {
+						final String content = Files.readString(Path.of("/proc/" + child + "/" + smapsToParse));
 
-					try (BufferedReader br = new BufferedReader(new StringReader(content))) {
-						String s;
+						try (BufferedReader br = new BufferedReader(new StringReader(content))) {
+							String s;
 
-						while ((s = br.readLine()) != null) {
-							// File content is something like this (the keys that we are missing from the `ps` output only):
-							// Pss: 16 kB
-							// SwapPss: 0 kB
+							while ((s = br.readLine()) != null) {
+								// File content is something like this (the keys that we are missing from the `ps` output only):
+								// Pss: 16 kB
+								// SwapPss: 0 kB
 
-							if (s.length() < 8)
-								continue;
+								if (s.length() < 8)
+									continue;
 
-							final char c0 = s.charAt(0);
+								final char c0 = s.charAt(0);
 
-							if ((c0 == 'P' && s.startsWith("Pss:")) || (c0 == 'S' && s.startsWith("SwapPss:"))) {
-								final int idxLast = s.lastIndexOf(' ');
-								final int idxPrev = s.lastIndexOf(' ', idxLast - 1);
+								if ((c0 == 'P' && s.startsWith("Pss:")) || (c0 == 'S' && s.startsWith("SwapPss:"))) {
+									final int idxLast = s.lastIndexOf(' ');
+									final int idxPrev = s.lastIndexOf(' ', idxLast - 1);
 
-								if (idxPrev > 0 && idxLast > 0) {
-									final long value = Long.parseLong(s.substring(idxPrev + 1, idxLast));
+									if (idxPrev > 0 && idxLast > 0) {
+										final long value = Long.parseLong(s.substring(idxPrev + 1, idxLast));
 
-									if (c0 == 'S')
-										swapPssKB += value;
-									else
-										pssKB += value;
+										if (c0 == 'S')
+											swapPssKB += value;
+										else
+											pssKB += value;
+									}
 								}
 							}
 						}
 					}
-				}
-				catch (@SuppressWarnings("unused") final IOException | IllegalArgumentException e) {
-					// ignore
+					catch (@SuppressWarnings("unused") final IOException | IllegalArgumentException e) {
+						// ignore
+					}
 				}
 			}
-
 			if (overConsumption < consumptionThres) {
 				if (cpuEfficiency > 120) {
 					overConsumption += 1;
@@ -579,6 +642,9 @@ public class MonitoredJob implements AutoCloseable {
 			ret.put(ApMonMonitoringConstants.LJOB_RSS, Double.valueOf(rsz));
 			ret.put(ApMonMonitoringConstants.LJOB_VIRTUALMEM, Double.valueOf(vsz));
 			ret.put(ApMonMonitoringConstants.LJOB_OPEN_FILES, Double.valueOf(fd));
+			ret.put(ApMonMonitoringConstants.LJOB_TOTAL_PROCS, Double.valueOf(children.size()));
+			if (!threads.isEmpty())
+				ret.put(ApMonMonitoringConstants.LJOB_TOTAL_THREADS, Double.valueOf(threads.size()));
 
 			if (pssKB == 0 && rsz > 0) {
 				// fake the PSS values if they are not supported, assuming that
@@ -837,89 +903,114 @@ public class MonitoredJob implements AutoCloseable {
 	 *
 	 * @param previousTotalCPUTime
 	 */
-	private void getCpuEfficiency(Vector<Integer> children, double elapsedtime, double previousTotalCPUTime) {
+	private void getCpuEfficiency(Vector<Integer> children, double elapsedtime, double previousTotalCPUTime, boolean detailedCPUMonitoring) {
 		long currentMeasureTime = System.currentTimeMillis();
-		HashMap<Integer, Double> previousProcCPUTime = new HashMap<>(currentProcCPUTime);
-		HashMap<Integer, Double> deltaCPUTime = new HashMap<>();
 		errorLogs = "";
+		double cpuTime = 0;
+		if (detailedCPUMonitoring || cgroup == null) {
+			HashMap<Integer, Double> previousProcCPUTime = new HashMap<>(currentProcCPUTime);
+			HashMap<Integer, Double> deltaCPUTime = new HashMap<>();
 
-		currentProcCPUTime.clear();
-		for (Integer child : children) {
-			final String filename = "/proc/" + child + "/stat";
-			try {
-				final String s = Files.readString(Path.of(filename));
+			currentProcCPUTime.clear();
+			for (Integer child : children) {
+				final String filename = "/proc/" + child + "/stat";
 				try {
-					int idx = s.lastIndexOf(')');
+					final String s = Files.readString(Path.of(filename));
+					try {
+						int idx = s.lastIndexOf(')');
 
-					if (idx < 0)
-						continue;
+						if (idx < 0)
+							continue;
 
-					final StringTokenizer st = new StringTokenizer(s.substring(idx + 3));
+						final StringTokenizer st = new StringTokenizer(s.substring(idx + 3));
 
-					if (st.countTokens() < 13)
-						continue;
+						if (st.countTokens() < 13)
+							continue;
 
-					for (int i = 0; i < 10; i++)
-						st.nextToken();
+						for (int i = 0; i < 10; i++)
+							st.nextToken();
 
-					final double procCpuTime = Double.parseDouble(st.nextToken()) + Double.parseDouble(st.nextToken());
-					currentProcCPUTime.put(child, Double.valueOf(procCpuTime));
-					final double delta = procCpuTime
-							- previousProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue();
+						final double procCpuTime = Double.parseDouble(st.nextToken()) + Double.parseDouble(st.nextToken());
+						currentProcCPUTime.put(child, Double.valueOf(procCpuTime));
+						final double delta = procCpuTime
+								- previousProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue();
 
-					long timeDiff = currentMeasureTime - previousMeasureTime;
-					if (timeDiff > 0 && (delta / hertz < numCPUs * timeDiff * 5 / 1000 || delta < 200 * hertz)) {
-						totalCPUTime = totalCPUTime + delta;
-						deltaCPUTime.put(child, Double.valueOf(delta));
-					} else {
-						errorLogs = errorLogs + "Discarding measure. Delta CPU time: " + delta + " from entry " + s + "\n";
-						logger.log(Level.INFO, errorLogs);
+						long timeDiff = currentMeasureTime - previousMeasureTime;
+						if (timeDiff > 0 && (delta / hertz < numCPUs * timeDiff * 5 / 1000 || delta < 200 * hertz)) {
+							totalCPUTime = totalCPUTime + delta;
+							deltaCPUTime.put(child, Double.valueOf(delta));
+						} else {
+							errorLogs = errorLogs + "Discarding measure. Delta CPU time: " + delta + " from entry " + s + "\n";
+							logger.log(Level.INFO, errorLogs);
+						}
+					}
+					catch (NumberFormatException e) {
+						logger.log(Level.WARNING, "The " + filename
+								+ " file did not have the correct formatting. Omitting process accounting.\n", e);
+					}
+
+				}
+				catch (IOException | IllegalArgumentException e) {
+					if (logger.isLoggable(Level.FINE))
+						logger.log(Level.FINE, "The file " + filename + " output could not be accessed. The process might have already died.\n", e);
+				}
+			}
+
+			long timeDiff = currentMeasureTime - previousMeasureTime;
+			if (previousMeasureTime > 0 && timeDiff > 0) {
+
+				registerCommand(previousProcCPUTime, timeDiff);
+
+				instantCpuEfficiency = 100000 * (((totalCPUTime - previousTotalCPUTime) / hertz) / timeDiff); // Current instantaneous efficiency
+
+				if (instantCpuEfficiency > 1000) {
+					logger.log(Level.WARNING, "Instantaneous CPU efficiency = "
+							+ String.format("%.2f", Double.valueOf(instantCpuEfficiency)) + " %.");
+				}
+
+				if (timeDiff / 1000 > 0 && (totalCPUTime - previousTotalCPUTime) / hertz > 5 * timeDiff * numCPUs / 1000) {
+					LinkedHashMap<Integer, Double> sortedMap = sortCPUConsumers(deltaCPUTime);
+					int counter = 0;
+					for (Integer child : sortedMap.keySet()) {
+						counter += 1;
+						errorLogs = errorLogs + "PID: " + child + ", command: " + procCommands.get(child) + ", old value: "
+								+ previousProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue() / hertz
+								+ ", new value: "
+								+ currentProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue() / hertz
+								+ ", delta CPU time: " + deltaCPUTime.get(child).doubleValue() / hertz + ", delta walltime: "
+								+ timeDiff / 1000 + ", usage: "
+								+ new DecimalFormat("#.0#").format(((deltaCPUTime.get(child).doubleValue() / hertz) / (timeDiff / 1000)) * 100) + "%\n";
+						if (counter >= 5)
+							break;
 					}
 				}
-				catch (NumberFormatException e) {
-					logger.log(Level.WARNING, "The " + filename
-							+ " file did not have the correct formatting. Omitting process accounting.\n", e);
+			}
+			cpuTime = totalCPUTime / hertz;
+		} else {
+			File fCPU = new File("/sys/fs/cgroup" + cgroup + "/cpu.stat");
+			if (fCPU.exists() && fCPU.canRead()) {
+				String s;
+				long user_usec = 0;
+				long system_usec = 0;
+				try (BufferedReader br = new BufferedReader(new FileReader(fCPU))) {
+					while ((s = br.readLine()) != null) {
+						if (s.startsWith("user_usec")) {
+							user_usec = Long.parseLong(s.split("\\s+")[1]);
+						}
+						else if (s.startsWith("system_usec")) {
+							system_usec = Long.parseLong(s.split("\\s+")[1]);
+						}
+					}
+				}
+				catch (IOException e) {
+					logger.log(Level.INFO, "Could not extract CPU usage from cgroup files. " + e);
 				}
 
-			}
-			catch (IOException | IllegalArgumentException e) {
-				if (logger.isLoggable(Level.FINE))
-					logger.log(Level.FINE, "The file " + filename + " output could not be accessed. The process might have already died.\n", e);
-			}
+				cpuTime = user_usec / 1000000 + system_usec / 1000000;
+			 }
 		}
-
-		long timeDiff = currentMeasureTime - previousMeasureTime;
-		if (previousMeasureTime > 0 && timeDiff > 0) {
-
-			registerCommand(previousProcCPUTime, timeDiff);
-
-			instantCpuEfficiency = 100000 * (((totalCPUTime - previousTotalCPUTime) / hertz) / timeDiff); // Current instantaneous efficiency
-
-			if (instantCpuEfficiency > 1000) {
-				logger.log(Level.WARNING, "Instantaneous CPU efficiency = "
-						+ String.format("%.2f", Double.valueOf(instantCpuEfficiency)) + " %.");
-			}
-
-			if (timeDiff / 1000 > 0 && (totalCPUTime - previousTotalCPUTime) / hertz > 5 * timeDiff * numCPUs / 1000) {
-				LinkedHashMap<Integer, Double> sortedMap = sortCPUConsumers(deltaCPUTime);
-				int counter = 0;
-				for (Integer child : sortedMap.keySet()) {
-					counter += 1;
-					errorLogs = errorLogs + "PID: " + child + ", command: " + procCommands.get(child) + ", old value: "
-							+ previousProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue() / hertz
-							+ ", new value: "
-							+ currentProcCPUTime.getOrDefault(child, Double.valueOf(0)).doubleValue() / hertz
-							+ ", delta CPU time: " + deltaCPUTime.get(child).doubleValue() / hertz + ", delta walltime: "
-							+ timeDiff / 1000 + ", usage: "
-							+ new DecimalFormat("#.0#").format(((deltaCPUTime.get(child).doubleValue() / hertz) / (timeDiff / 1000)) * 100) + "%\n";
-					if (counter >= 5)
-						break;
-				}
-			}
-		}
-
 		final double etime = (elapsedtime == 0) ? (currentMeasureTime - initialMeasureTime) / 1000 : elapsedtime;
-		cpuEfficiency = 100 * (totalCPUTime / hertz) / (etime * numCPUs); // If we want to get the average efficiency
+		cpuEfficiency = 100 * cpuTime / (etime * numCPUs); // If we want to get the average efficiency
 	}
 
 	private static LinkedHashMap<Integer, Double> sortCPUConsumers(Map<Integer, Double> deltaCPUTime) {
