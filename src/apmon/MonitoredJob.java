@@ -184,6 +184,7 @@ public class MonitoredJob implements AutoCloseable {
 				if ((s = br.readLine()) != null) {
 					if (s.contains("JobAgent_") || s.contains("runner")) {
 						this.cgroup = s.split(":")[2];
+						logger.log(Level.INFO, "Monitoring for job " + pid + " will be done using cgroups v2 accounting (" + cgroup + ")");
 					}
 				}
 			}
@@ -191,6 +192,8 @@ public class MonitoredJob implements AutoCloseable {
 				logger.log(Level.INFO, "Could not read process cgroup file ", e);
 			}
 		}
+		if (this.cgroup == null)
+			logger.log(Level.INFO, "Monitoring for job " + pid + " will be done with ps // reading /proc files");
 	}
 
 	/**
