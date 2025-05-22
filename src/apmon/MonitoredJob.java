@@ -183,7 +183,7 @@ public class MonitoredJob implements AutoCloseable {
 			try (BufferedReader br = new BufferedReader(new FileReader(fCgroup))) {
 				if ((s = br.readLine()) != null) {
 					String tmpCgroup = s.split(":")[2];
-					if (s.contains("JAliEn_agents") || s.contains("JAliEn_runner")) {
+					if (s.contains("JAliEn_agents/JobAgent_") || s.endsWith("/JAliEn_runner")) {
 						this.cgroup = tmpCgroup;
 						logger.log(Level.WARNING, "Monitoring for job " + pid + " will be done using cgroups v2 accounting (" + cgroup + ")");
 					} else {
