@@ -475,6 +475,23 @@ public class ApMon {
 	}
 
 	/**
+	 * Get a job from monitored jobs vector
+	 *
+	 * @param pid
+	 */
+	public MonitoredJob getJobToMonitor(String cluster) {
+		final Iterator<MonitoredJob> it = monJobs.iterator();
+
+		while (it.hasNext()) {
+			final MonitoredJob job = it.next();
+			if (job.getClusterName().equals(cluster)) {
+				return job;
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * @param job
 	 * @return <code>true</code> if the job was found and removed
 	 */

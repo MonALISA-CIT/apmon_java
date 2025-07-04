@@ -118,6 +118,7 @@ public class MonitoredJob implements AutoCloseable {
 	String errorLogs;
 
 	String cgroup;
+	String parentCgroup;
 
 	/**
 	 * Synchronize updates
@@ -922,6 +923,26 @@ public class MonitoredJob implements AutoCloseable {
 	}
 
 	/*
+	 * Computes the instantaneous CPU efficiency from the previous values
+	 *
+	 * @param previousTotalCPUTime last measured value for CPUTime
+	 * @param previousTs last measured timestamp
+	 *
+	 * @return Double array containing the instantaneous efficiency and the updated totalCPUTime
+	 */
+	public Double[] updateCpuEfficiency(double previousTotalCPUTime, long previousTs) {
+		double instantEfficiency = 0;
+		double currentTotalCPUTime = 0;
+		synchronized (requestSync) {
+			currentTotalCPUTime = efficiencyFromCgroupV2(parentCgroup);
+			long currentMeasureTime = System.currentTimeMillis();
+			long timeDiff = currentMeasureTime - previousTs;
+			instantEfficiency = 100000 * (((currentTotalCPUTime - previousTotalCPUTime) / hertz) / timeDiff); // Current instantaneous efficiency
+		}
+		return new Double[] {Double.valueOf(instantEfficiency), Double.valueOf(currentTotalCPUTime)};
+	}
+
+	/*
 	 * Computes instantaneous and average CPU efficiencies
 	 *
 	 * @param children
@@ -1011,29 +1032,39 @@ public class MonitoredJob implements AutoCloseable {
 				}
 			}
 		} else {
-			File fCPU = new File("/sys/fs/cgroup" + cgroup + "/cpu.stat");
-			if (fCPU.exists() && fCPU.canRead()) {
-				String s;
-				long usage_usec = 0;
-				try (BufferedReader br = new BufferedReader(new FileReader(fCPU))) {
-					while ((s = br.readLine()) != null) {
-						if (s.startsWith("usage_usec")) {
-							usage_usec = Long.parseLong(s.split("\\s+")[1]);
-							break;
-						}
-					}
-				}
-				catch (IOException e) {
-					logger.log(Level.INFO, "Could not extract CPU usage from cgroup files. " + e);
-				}
-
-				if (previousMeasureTime > 0 && timeDiff > 0) {
-					totalCPUTime = usage_usec * hertz / 1000000; // To unify units in CPU clocks we multiply by hertz
-				}
-			 }
+			totalCPUTime = efficiencyFromCgroupV2(cgroup);
 		}
 		cpuEfficiency = 100 * (totalCPUTime / hertz) / (etime * numCPUs); // If we want to get the average efficiency
 		instantCpuEfficiency = 100000 * (((totalCPUTime - previousTotalCPUTime) / hertz) / timeDiff); // Current instantaneous efficiency
+	}
+
+	/*
+	 * Computes the CPU Time for the cgroup
+	 *
+	 * @param cgroup to be checked
+	 *
+	 * @return cpuTime
+	 */
+	private double efficiencyFromCgroupV2(String cgroupToCheck) {
+		File fCPU = new File("/sys/fs/cgroup" + cgroupToCheck + "/cpu.stat");
+		double currentCpuTime = totalCPUTime;
+		if (fCPU.exists() && fCPU.canRead()) {
+			String s;
+			long usage_usec = 0;
+			try (BufferedReader br = new BufferedReader(new FileReader(fCPU))) {
+				while ((s = br.readLine()) != null) {
+					if (s.startsWith("usage_usec")) {
+						usage_usec = Long.parseLong(s.split("\\s+")[1]);
+						break;
+					}
+				}
+			}
+			catch (IOException e) {
+				logger.log(Level.INFO, "Could not extract CPU usage from cgroup files. " + e);
+			}
+			currentCpuTime = usage_usec * hertz / 1000000; // To unify units in CPU clocks we multiply by hertz
+		 }
+		return currentCpuTime;
 	}
 
 	private static LinkedHashMap<Integer, Double> sortCPUConsumers(Map<Integer, Double> deltaCPUTime) {
@@ -1169,6 +1200,20 @@ public class MonitoredJob implements AutoCloseable {
 	 */
 	public boolean getPayloadMonitoring() {
 		return payloadMonitoring;
+	}
+
+	/**
+	 * @return clusterName
+	 */
+	public String getClusterName() {
+		return clusterName;
+	}
+
+	/**
+	 * @param cgroup
+	 */
+	public void setParentCgroup(String mjCgroup) {
+		this.parentCgroup = mjCgroup;
 	}
 
 	/**
