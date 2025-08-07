@@ -1236,6 +1236,8 @@ public class MonitoredJob implements AutoCloseable {
 	}
 
 	public boolean hasMemoryControllerEnabled() {
+		if (cgroup == null)
+			return false;
 		try {
 			final Path path = Paths.get("/sys/fs/cgroup/" + cgroup + "/cgroup.controllers");
 
