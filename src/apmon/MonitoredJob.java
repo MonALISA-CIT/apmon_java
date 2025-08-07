@@ -118,6 +118,8 @@ public class MonitoredJob implements AutoCloseable {
 	String errorLogs;
 
 	String cgroup;
+	String parentCgroup;
+	boolean hasMemoryController;
 
 	/**
 	 * Synchronize updates
@@ -197,6 +199,7 @@ public class MonitoredJob implements AutoCloseable {
 		} else {
 			logger.log(Level.WARNING, "Could not get cgroup. Monitoring for job " + pid + " will be done with ps // reading /proc files");
 		}
+		this.hasMemoryController = hasMemoryControllerEnabled();
 	}
 
 	/**
@@ -461,7 +464,7 @@ public class MonitoredJob implements AutoCloseable {
 					Files.lines(Paths.get("/sys/fs/cgroup/" + cgroup + "/cgroup.procs")).map(String::trim).filter(process -> !process.isEmpty()).map(Integer::parseInt).forEach(children::add);
 					Files.lines(Paths.get("/sys/fs/cgroup/" + cgroup + "/cgroup.threads")).map(String::trim).filter(thread -> !thread.isEmpty()).map(Integer::parseInt).forEach(threads::add);
 				} catch (IOException | NumberFormatException e) {
-				    logger.log(Level.INFO, "Processes could not be fetched from cgroups ", e);
+				    logger.log(Level.WARNING, "Processes could not be fetched from cgroups ", e);
 				}
 			} else {
 				children = getChildren(pid);
@@ -575,7 +578,7 @@ public class MonitoredJob implements AutoCloseable {
 			double pssKB = 0;
 			double swapPssKB = 0;
 
-			if (cgroup != null) {
+			if (cgroup != null && hasMemoryController) {
 				try {
 					File fMemory = new File("/sys/fs/cgroup/" + cgroup + "/memory.current");
 					if (fMemory.exists() && fMemory.canRead()) {
@@ -586,7 +589,7 @@ public class MonitoredJob implements AutoCloseable {
 							}
 						}
 					}
-					File fSwap = new File("/sys/fs/cgroup" + cgroup + "/memory.swap.current");
+					File fSwap = new File("/sys/fs/cgroup/" + cgroup + "/memory.swap.current");
 					if (fSwap.exists() && fSwap.canRead()) {
 						String s;
 						try (BufferedReader br = new BufferedReader(new FileReader(fSwap))) {
@@ -599,8 +602,8 @@ public class MonitoredJob implements AutoCloseable {
 					pmem = pssKB / tm.doubleValue() * 100;
 					vsz = swapPssKB + pssKB;
 					rsz = pssKB;
-				} catch (IOException | NumberFormatException e) {
-				    logger.log(Level.INFO, "Memory could not be fetched from cgroup interface files ", e);
+				} catch (Exception e) {
+				    logger.log(Level.SEVERE, "Memory could not be fetched from cgroup interface files ", e);
 				}
 			} else {
 				String smapsToParse = "smaps_rollup";
@@ -648,7 +651,7 @@ public class MonitoredJob implements AutoCloseable {
 			if (overConsumption < consumptionThres) {
 				if (cpuEfficiency > 120) {
 					overConsumption += 1;
-					logger.log(Level.SEVERE,
+					logger.log(Level.INFO,
 							"CPU Efficiency exceeding limit count increase. Current count - " + overConsumption);
 				}
 				else
@@ -689,7 +692,6 @@ public class MonitoredJob implements AutoCloseable {
 
 			previousMeasureTime = currentMeasureTime;
 		}
-
 		cachedJobInfo = ret;
 
 		return ret;
@@ -922,6 +924,26 @@ public class MonitoredJob implements AutoCloseable {
 	}
 
 	/*
+	 * Computes the instantaneous CPU efficiency from the previous values
+	 *
+	 * @param previousTotalCPUTime last measured value for CPUTime
+	 * @param previousTs last measured timestamp
+	 *
+	 * @return Double array containing the instantaneous efficiency and the updated totalCPUTime
+	 */
+	public Double[] updateCpuEfficiency(double previousTotalCPUTime, long previousTs) {
+		double instantEfficiency = 0;
+		double currentTotalCPUTime = 0;
+		synchronized (requestSync) {
+			currentTotalCPUTime = efficiencyFromCgroupV2(parentCgroup);
+			long currentMeasureTime = System.currentTimeMillis();
+			long timeDiff = currentMeasureTime - previousTs;
+			instantEfficiency = 100000 * (((currentTotalCPUTime - previousTotalCPUTime) / hertz) / timeDiff); // Current instantaneous efficiency
+		}
+		return new Double[] {Double.valueOf(instantEfficiency), Double.valueOf(currentTotalCPUTime)};
+	}
+
+	/*
 	 * Computes instantaneous and average CPU efficiencies
 	 *
 	 * @param children
@@ -1011,29 +1033,39 @@ public class MonitoredJob implements AutoCloseable {
 				}
 			}
 		} else {
-			File fCPU = new File("/sys/fs/cgroup" + cgroup + "/cpu.stat");
-			if (fCPU.exists() && fCPU.canRead()) {
-				String s;
-				long usage_usec = 0;
-				try (BufferedReader br = new BufferedReader(new FileReader(fCPU))) {
-					while ((s = br.readLine()) != null) {
-						if (s.startsWith("usage_usec")) {
-							usage_usec = Long.parseLong(s.split("\\s+")[1]);
-							break;
-						}
-					}
-				}
-				catch (IOException e) {
-					logger.log(Level.INFO, "Could not extract CPU usage from cgroup files. " + e);
-				}
-
-				if (previousMeasureTime > 0 && timeDiff > 0) {
-					totalCPUTime = usage_usec * hertz / 1000000; // To unify units in CPU clocks we multiply by hertz
-				}
-			 }
+			totalCPUTime = efficiencyFromCgroupV2(cgroup);
 		}
 		cpuEfficiency = 100 * (totalCPUTime / hertz) / (etime * numCPUs); // If we want to get the average efficiency
 		instantCpuEfficiency = 100000 * (((totalCPUTime - previousTotalCPUTime) / hertz) / timeDiff); // Current instantaneous efficiency
+	}
+
+	/*
+	 * Computes the CPU Time for the cgroup
+	 *
+	 * @param cgroup to be checked
+	 *
+	 * @return cpuTime
+	 */
+	private double efficiencyFromCgroupV2(String cgroupToCheck) {
+		File fCPU = new File("/sys/fs/cgroup" + cgroupToCheck + "/cpu.stat");
+		double currentCpuTime = totalCPUTime;
+		if (fCPU.exists() && fCPU.canRead()) {
+			String s;
+			long usage_usec = 0;
+			try (BufferedReader br = new BufferedReader(new FileReader(fCPU))) {
+				while ((s = br.readLine()) != null) {
+					if (s.startsWith("usage_usec")) {
+						usage_usec = Long.parseLong(s.split("\\s+")[1]);
+						break;
+					}
+				}
+			}
+			catch (IOException e) {
+				logger.log(Level.INFO, "Could not extract CPU usage from cgroup files. " + e);
+			}
+			currentCpuTime = usage_usec * hertz / 1000000; // To unify units in CPU clocks we multiply by hertz
+		 }
+		return currentCpuTime;
 	}
 
 	private static LinkedHashMap<Integer, Double> sortCPUConsumers(Map<Integer, Double> deltaCPUTime) {
@@ -1105,7 +1137,7 @@ public class MonitoredJob implements AutoCloseable {
 		}
 		else {
 			open_files = -1;
-			logger.log(Level.SEVERE, "ProcInfo: job " + processid + "not exist.");
+			logger.log(Level.INFO, "ProcInfo: job " + processid + "not exist.");
 		}
 		return open_files;
 	}
@@ -1172,6 +1204,27 @@ public class MonitoredJob implements AutoCloseable {
 	}
 
 	/**
+	 * @return clusterName
+	 */
+	public String getClusterName() {
+		return clusterName;
+	}
+
+	/**
+	 * @param cgroup
+	 */
+	public void setParentCgroup(String mjCgroup) {
+		this.parentCgroup = mjCgroup;
+	}
+
+	/**
+	 * @return parentCgroup
+	 */
+	public String getParentCgroup() {
+		return this.parentCgroup;
+	}
+
+	/**
 	 * @param timestamp reference time when the payload / pid to monitor has started, overriding the `ps` output for this instance
 	 * @return previous job startup time
 	 */
@@ -1180,5 +1233,20 @@ public class MonitoredJob implements AutoCloseable {
 		this.jobStartupTime = timestamp;
 
 		return oldValue;
+	}
+
+	public boolean hasMemoryControllerEnabled() {
+		try {
+			final Path path = Paths.get("/sys/fs/cgroup/" + cgroup + "/cgroup.controllers");
+
+			final String controllers = Files.readString(path);
+			if (controllers.contains("memory"))
+				return true;
+		}
+		catch (final Exception e) {
+			logger.log(Level.FINE, "Exception checking if cgroup " + cgroup + " has the memory controller enabled", e);
+			return false;
+		}
+		return false;
 	}
 }
