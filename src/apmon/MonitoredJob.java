@@ -50,6 +50,7 @@ import java.util.StringTokenizer;
 import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 import apmon.lisa_host.cmdExec;
 import apmon.lisa_host.HostPropertiesMonitor;
@@ -188,15 +189,17 @@ public class MonitoredJob implements AutoCloseable {
 					if (s.contains("JAliEn_agents/JobAgent_") || s.endsWith("/JAliEn_runner")) {
 						this.cgroup = tmpCgroup;
 						logger.log(Level.WARNING, "Monitoring for job " + pid + " will be done using cgroups v2 accounting (" + cgroup + ")");
-					} else {
+					}
+					else {
 						logger.log(Level.WARNING, "Job using external cgroup (" + tmpCgroup + "). Monitoring for job " + pid + " will be done with ps // reading /proc files");
 					}
 				}
 			}
-			catch ( IOException e) {
+			catch (IOException e) {
 				logger.log(Level.INFO, "Could not read process cgroup file. Monitoring for job " + pid + " will be done with ps // reading /proc files", e);
 			}
-		} else {
+		}
+		else {
 			logger.log(Level.WARNING, "Could not get cgroup. Monitoring for job " + pid + " will be done with ps // reading /proc files");
 		}
 		this.hasMemoryController = hasMemoryControllerEnabled();
@@ -417,8 +420,8 @@ public class MonitoredJob implements AutoCloseable {
 	private HashMap<Long, Double> cachedJobInfo = null;
 
 	/**
-	 * @param Detailed monitoring if <code>true</code> then include per-process monitoring
 	 * @param cachedData if <code>true</code> then reuse the same job info data that was collected by a previous call to this method (when this parameter is <code>false</code>)
+	 * @param detailedCPUMonitoring Detailed monitoring if <code>true</code> then include per-process monitoring
 	 * @return job monitoring
 	 * @throws IOException
 	 */
@@ -460,13 +463,16 @@ public class MonitoredJob implements AutoCloseable {
 			long currentMeasureTime = System.currentTimeMillis();
 
 			if (this.cgroup != null) {
-				try {
-					Files.lines(Paths.get("/sys/fs/cgroup/" + cgroup + "/cgroup.procs")).map(String::trim).filter(process -> !process.isEmpty()).map(Integer::parseInt).forEach(children::add);
-					Files.lines(Paths.get("/sys/fs/cgroup/" + cgroup + "/cgroup.threads")).map(String::trim).filter(thread -> !thread.isEmpty()).map(Integer::parseInt).forEach(threads::add);
-				} catch (IOException | NumberFormatException e) {
-				    logger.log(Level.WARNING, "Processes could not be fetched from cgroups ", e);
+				try (Stream<String> procs = Files.lines(Paths.get("/sys/fs/cgroup/" + cgroup + "/cgroup.procs"));
+						Stream<String> cthreads = Files.lines(Paths.get("/sys/fs/cgroup/" + cgroup + "/cgroup.threads"))) {
+					procs.map(String::trim).filter(process -> !process.isEmpty()).map(Integer::parseInt).forEach(children::add);
+					cthreads.map(String::trim).filter(thread -> !thread.isEmpty()).map(Integer::parseInt).forEach(threads::add);
 				}
-			} else {
+				catch (IOException | NumberFormatException e) {
+					logger.log(Level.WARNING, "Processes could not be fetched from cgroups ", e);
+				}
+			}
+			else {
 				children = getChildren(pid);
 			}
 
@@ -487,10 +493,12 @@ public class MonitoredJob implements AutoCloseable {
 							if (_fd != -1)
 								fd += _fd;
 						}
-					} catch (IOException | NumberFormatException e) {
-					    logger.log(Level.INFO, "Could not parse elapsed time from /proc ", e);
 					}
-				} else {
+					catch (IOException | NumberFormatException e) {
+						logger.log(Level.INFO, "Could not parse elapsed time from /proc ", e);
+					}
+				}
+				else {
 					/* issue the "ps" command to obtain information on all the descendants */
 					final StringBuilder cmd = new StringBuilder("ps -p ");
 					for (i = 0; i < children.size(); i++) {
@@ -602,10 +610,12 @@ public class MonitoredJob implements AutoCloseable {
 					pmem = pssKB / tm.doubleValue() * 100;
 					vsz = swapPssKB + pssKB;
 					rsz = pssKB;
-				} catch (Exception e) {
-				    logger.log(Level.SEVERE, "Memory could not be fetched from cgroup interface files ", e);
 				}
-			} else {
+				catch (Exception e) {
+					logger.log(Level.SEVERE, "Memory could not be fetched from cgroup interface files ", e);
+				}
+			}
+			else {
 				String smapsToParse = "smaps_rollup";
 				if (!Files.exists(Path.of("/proc/" + children.get(0) + "/smaps_rollup")))
 					smapsToParse = "smaps";
@@ -923,10 +933,11 @@ public class MonitoredJob implements AutoCloseable {
 		return contextSwitches;
 	}
 
-	/*
+	/**
 	 * Computes the instantaneous CPU efficiency from the previous values
 	 *
 	 * @param previousTotalCPUTime last measured value for CPUTime
+	 * 
 	 * @param previousTs last measured timestamp
 	 *
 	 * @return Double array containing the instantaneous efficiency and the updated totalCPUTime
@@ -940,7 +951,7 @@ public class MonitoredJob implements AutoCloseable {
 			long timeDiff = currentMeasureTime - previousTs;
 			instantEfficiency = 100000 * (((currentTotalCPUTime - previousTotalCPUTime) / hertz) / timeDiff); // Current instantaneous efficiency
 		}
-		return new Double[] {Double.valueOf(instantEfficiency), Double.valueOf(currentTotalCPUTime)};
+		return new Double[] { Double.valueOf(instantEfficiency), Double.valueOf(currentTotalCPUTime) };
 	}
 
 	/*
@@ -989,7 +1000,8 @@ public class MonitoredJob implements AutoCloseable {
 						if (timeDiff > 0 && (delta / hertz < numCPUs * timeDiff * 5 / 1000 || delta < 200 * hertz)) {
 							totalCPUTime = totalCPUTime + delta;
 							deltaCPUTime.put(child, Double.valueOf(delta));
-						} else {
+						}
+						else {
 							errorLogs = errorLogs + "Discarding measure. Delta CPU time: " + delta + " from entry " + s + "\n";
 							logger.log(Level.INFO, errorLogs);
 						}
@@ -1010,10 +1022,12 @@ public class MonitoredJob implements AutoCloseable {
 
 				registerCommand(previousProcCPUTime, timeDiff);
 
-				/*if (instantCpuEfficiency > 1000) {
-					logger.log(Level.WARNING, "Instantaneous CPU efficiency = "
-							+ String.format("%.2f", Double.valueOf(instantCpuEfficiency)) + " %.");
-				}*/
+				/*
+				 * if (instantCpuEfficiency > 1000) {
+				 * logger.log(Level.WARNING, "Instantaneous CPU efficiency = "
+				 * + String.format("%.2f", Double.valueOf(instantCpuEfficiency)) + " %.");
+				 * }
+				 */
 
 				if (timeDiff / 1000 > 0 && (totalCPUTime - previousTotalCPUTime) / hertz > 5 * timeDiff * numCPUs / 1000) {
 					LinkedHashMap<Integer, Double> sortedMap = sortCPUConsumers(deltaCPUTime);
@@ -1032,7 +1046,8 @@ public class MonitoredJob implements AutoCloseable {
 					}
 				}
 			}
-		} else {
+		}
+		else {
 			totalCPUTime = efficiencyFromCgroupV2(cgroup);
 		}
 		cpuEfficiency = 100 * (totalCPUTime / hertz) / (etime * numCPUs); // If we want to get the average efficiency
@@ -1064,7 +1079,7 @@ public class MonitoredJob implements AutoCloseable {
 				logger.log(Level.INFO, "Could not extract CPU usage from cgroup files. " + e);
 			}
 			currentCpuTime = usage_usec * hertz / 1000000; // To unify units in CPU clocks we multiply by hertz
-		 }
+		}
 		return currentCpuTime;
 	}
 
