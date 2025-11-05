@@ -122,11 +122,6 @@ public class MonitoredJob implements AutoCloseable {
 	String parentCgroup;
 	boolean hasMemoryController;
 
-	/**
-	 * Synchronize updates
-	 */
-	protected static final Object requestSync = new Object();
-
 	private long jobStartupTime = 0;
 
 	/**
@@ -454,7 +449,7 @@ public class MonitoredJob implements AutoCloseable {
 		 */
 		Vector<String> mem_cmd_list = new Vector<>();
 
-		synchronized (requestSync) {
+		synchronized (this) {
 			/* get the list of the process' descendants */
 			Vector<Integer> children = new Vector<>();
 			final Vector<Integer> threads = new Vector<>();
@@ -945,7 +940,7 @@ public class MonitoredJob implements AutoCloseable {
 	public Double[] updateCpuEfficiency(double previousTotalCPUTime, long previousTs) {
 		double instantEfficiency = 0;
 		double currentTotalCPUTime = 0;
-		synchronized (requestSync) {
+		synchronized (this) {
 			currentTotalCPUTime = efficiencyFromCgroupV2(parentCgroup);
 			long currentMeasureTime = System.currentTimeMillis();
 			long timeDiff = currentMeasureTime - previousTs;
