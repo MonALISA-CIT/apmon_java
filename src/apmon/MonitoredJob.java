@@ -1235,6 +1235,20 @@ public class MonitoredJob implements AutoCloseable {
 	}
 
 	/**
+	 * @return cgroup
+	 */
+	public String getCgroup() {
+		return this.cgroup;
+	}
+
+	/**
+	 * @param cgroup
+	 */
+	public void setCgroup(String cgroup) {
+		this.cgroup = cgroup;
+	}
+
+	/**
 	 * @param timestamp reference time when the payload / pid to monitor has started, overriding the `ps` output for this instance
 	 * @return previous job startup time
 	 */
