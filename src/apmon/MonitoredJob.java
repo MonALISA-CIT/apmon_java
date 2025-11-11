@@ -599,14 +599,17 @@ public class MonitoredJob implements AutoCloseable {
 								long value = Long.parseLong(sSplit[1]);
 								if ("anon".equals(field))
 									total += value;
-								else if ("active_file".equals(field))
-									total += value;
-								else if ("file_mapped".equals(field))
-									total += value;
-								else if ("shmem".equals(field))
-									total += value;
+								else
+									if ("active_file".equals(field))
+										total += value;
+									else
+										if ("file_mapped".equals(field))
+											total += value;
+										else
+											if ("shmem".equals(field))
+												total += value;
 							}
-							pssKB = (double) (Long.valueOf(total) / 1024L);
+							pssKB = total / 1024.;
 						}
 					}
 					File fSwap = new File("/sys/fs/cgroup/" + cgroup + "/memory.swap.current");
@@ -619,6 +622,10 @@ public class MonitoredJob implements AutoCloseable {
 						}
 					}
 					Double tm = Double.valueOf(HostPropertiesMonitor.getMemTotalCall());
+					
+					// cgroups memory.stat fields include the swapped out memory. We'll report the two values separately.
+					pssKB = Math.max(pssKB - swapPssKB, 0);
+					
 					pmem = pssKB / tm.doubleValue() * 100;
 					vsz = swapPssKB + pssKB;
 					rsz = pssKB;
@@ -1238,7 +1245,7 @@ public class MonitoredJob implements AutoCloseable {
 	}
 
 	/**
-	 * @param cgroup
+	 * @param mjCgroup
 	 */
 	public void setParentCgroup(String mjCgroup) {
 		this.parentCgroup = mjCgroup;
@@ -1279,4 +1286,3 @@ public class MonitoredJob implements AutoCloseable {
 		return false;
 	}
 }
-
