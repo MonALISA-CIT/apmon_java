@@ -588,13 +588,25 @@ public class MonitoredJob implements AutoCloseable {
 
 			if (cgroup != null && hasMemoryController) {
 				try {
-					File fMemory = new File("/sys/fs/cgroup/" + cgroup + "/memory.current");
+					File fMemory = new File("/sys/fs/cgroup/" + cgroup + "/memory.stat");
 					if (fMemory.exists() && fMemory.canRead()) {
+						long total = 0;
 						String s;
 						try (BufferedReader br = new BufferedReader(new FileReader(fMemory))) {
-							if ((s = br.readLine()) != null) {
-								pssKB = Long.valueOf(s).longValue() / 1024;
+							while ((s = br.readLine()) != null) {
+								String[] sSplit = s.split("\\s+");
+								String field = sSplit[0];
+								long value = Long.parseLong(sSplit[1]);
+								if ("anon".equals(field))
+									total += value;
+								else if ("active_file".equals(field))
+									total += value;
+								else if ("file_mapped".equals(field))
+									total += value;
+								else if ("shmem".equals(field))
+									total += value;
 							}
+							pssKB = (double) (Long.valueOf(total) / 1024L);
 						}
 					}
 					File fSwap = new File("/sys/fs/cgroup/" + cgroup + "/memory.swap.current");
@@ -1267,3 +1279,4 @@ public class MonitoredJob implements AutoCloseable {
 		return false;
 	}
 }
+
