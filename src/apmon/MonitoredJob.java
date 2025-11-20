@@ -620,10 +620,8 @@ public class MonitoredJob implements AutoCloseable {
 					
 					// cgroups memory.stat fields include the swapped out memory. We'll report the two values separately.
 					pssKB = Math.max(pssKB - swapPssKB, 0);
-					
+
 					pmem = pssKB / tm.doubleValue() * 100;
-					vsz = swapPssKB + pssKB;
-					rsz = pssKB;
 				}
 				catch (Exception e) {
 					logger.log(Level.SEVERE, "Memory could not be fetched from cgroup interface files ", e);
@@ -666,12 +664,18 @@ public class MonitoredJob implements AutoCloseable {
 								}
 							}
 						}
+						Double tm = Double.valueOf(HostPropertiesMonitor.getMemTotalCall());
+						pmem = pssKB / tm.doubleValue() * 100;
 					}
 					catch (@SuppressWarnings("unused") final IOException | IllegalArgumentException e) {
 						// ignore
 					}
 				}
 			}
+
+			vsz = swapPssKB + pssKB;
+			rsz = pssKB;
+
 			if (overConsumption < consumptionThres) {
 				if (cpuEfficiency > 120) {
 					overConsumption += 1;
@@ -1285,12 +1289,12 @@ public class MonitoredJob implements AutoCloseable {
 			final Path path = Paths.get("/sys/fs/cgroup/" + cgroup + "/cgroup.controllers");
 
 			final String controllers = Files.readString(path);
+			logger.log(Level.WARNING, "Cgroup " + cgroup + " controller list - " + controllers);
 			if (controllers.contains("memory"))
 				return true;
 		}
 		catch (final Exception e) {
 			logger.log(Level.FINE, "Exception checking if cgroup " + cgroup + " has the memory controller enabled", e);
-			return false;
 		}
 		return false;
 	}
