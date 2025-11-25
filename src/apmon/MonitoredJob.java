@@ -85,8 +85,6 @@ public class MonitoredJob implements AutoCloseable {
 
 	private static final Logger logger = Logger.getLogger("apmon");
 
-	private cmdExec exec = null;
-
 	final int numCPUs;
 
 	final boolean isLinux;
@@ -146,12 +144,11 @@ public class MonitoredJob implements AutoCloseable {
 		this.workDir = _workDir;
 		this.clusterName = _clusterName;
 		this.nodeName = _nodeName;
-		this.exec = new cmdExec();
 		this.numCPUs = _numCPUs;
 		File f = new File("/proc/stat");
 		if (f.exists() && f.canRead()) {
 			this.isLinux = true;
-			try {
+			try (cmdExec exec = new cmdExec()) {
 				this.hertz = Integer.parseInt(exec.executeCommandReality("getconf CLK_TCK", "").replace("\n", ""));
 			}
 			catch (NumberFormatException e) {
@@ -233,32 +230,35 @@ public class MonitoredJob implements AutoCloseable {
 
 		final String safeWorkDir = workDir.replace("'", "'\\''");
 
-		cmd = "POSIXLY_CORRECT=1 find -H '" + safeWorkDir + "' -xdev -ls | awk '$4 == 1 || $3 ~ /^d/ || ! c[$1]++ { s += $2 } END { print int(s / 2) }'";
-		result = exec.executeCommandReality(cmd, "");
-
-		try {
-			workdir_size = Double.parseDouble(result) / 1024;
-		}
-		catch (NumberFormatException nfe) {
-			if (logger.isLoggable(Level.WARNING))
-				logger.log(Level.WARNING, "Exception parsing the output of `" + cmd + "`: " + result, nfe);
-
-			cmd = "du -Lscm '" + safeWorkDir + "' | tail -1 | cut -f 1";
+		try (cmdExec exec = new cmdExec()) {
+			cmd = "POSIXLY_CORRECT=1 find -H '" + safeWorkDir + "' -xdev -ls | awk '$4 == 1 || $3 ~ /^d/ || ! c[$1]++ { s += $2 } END { print int(s / 2) }'";
 			result = exec.executeCommandReality(cmd, "");
 
 			try {
-				workdir_size = Double.parseDouble(result);
+				workdir_size = Double.parseDouble(result) / 1024;
 			}
-			catch (NumberFormatException nfe2) {
+			catch (NumberFormatException nfe) {
 				if (logger.isLoggable(Level.WARNING))
-					logger.log(Level.WARNING, "Exception parsing the output of `" + cmd + "`", nfe2);
+					logger.log(Level.WARNING, "Exception parsing the output of `" + cmd + "`: " + result, nfe);
+
+				cmd = "du -Lscm '" + safeWorkDir + "' | tail -1 | cut -f 1";
+				result = exec.executeCommandReality(cmd, "");
+
+				try {
+					workdir_size = Double.parseDouble(result);
+				}
+				catch (NumberFormatException nfe2) {
+					if (logger.isLoggable(Level.WARNING))
+						logger.log(Level.WARNING, "Exception parsing the output of `" + cmd + "`", nfe2);
+				}
 			}
+
+			hm.put(ApMonMonitoringConstants.LJOB_WORKDIR_SIZE, Double.valueOf(workdir_size));
+
+			cmd = "df -P -m '" + safeWorkDir + "' | tail -1";
+			result = exec.executeCommand(cmd, "");
 		}
 
-		hm.put(ApMonMonitoringConstants.LJOB_WORKDIR_SIZE, Double.valueOf(workdir_size));
-
-		cmd = "df -P -m '" + safeWorkDir + "' | tail -1";
-		result = exec.executeCommand(cmd, "");
 		final StringTokenizer st = new StringTokenizer(result, " \t%");
 
 		st.nextToken(); // skip over the filesystem name
@@ -289,7 +289,9 @@ public class MonitoredJob implements AutoCloseable {
 	 * @return children processes
 	 */
 	private Vector<Integer> getChildren(final int targetPid) {
-		return getChildren(targetPid, exec);
+		try (cmdExec exec = new cmdExec()) {
+			return getChildren(targetPid, exec);
+		}
 	}
 
 	/**
@@ -510,7 +512,9 @@ public class MonitoredJob implements AutoCloseable {
 						cpuEfficiency = 0.0;
 					}
 
-					result = exec.executeCommandReality(cmd.toString(), "");
+					try (cmdExec exec = new cmdExec()) {
+						result = exec.executeCommandReality(cmd.toString(), "");
+					}
 
 					// skip over the first line of the `ps` output
 					int idx = result.indexOf('\n');
@@ -617,10 +621,10 @@ public class MonitoredJob implements AutoCloseable {
 						}
 					}
 					Double tm = Double.valueOf(HostPropertiesMonitor.getMemTotalCall());
-					
+
 					// cgroups memory.stat fields include the swapped out memory. We'll report the two values separately.
 					pssKB = Math.max(pssKB - swapPssKB, 0);
-					
+
 					pmem = pssKB / tm.doubleValue() * 100;
 					vsz = swapPssKB + pssKB;
 					rsz = pssKB;
@@ -725,12 +729,14 @@ public class MonitoredJob implements AutoCloseable {
 	 * @param payloadGrep Pattern to grep for finding the payload
 	 */
 	public void discoverPayloadPid(String payloadGrep) {
-		if (payloadMonitoring == true && payloadPid == 0 && wrapperPid != 0) {
-			String cmd = "pgrep -P " + wrapperPid + " -f " + payloadGrep;
-			String result = exec.executeCommandReality(cmd, "");
-			if (!result.isEmpty()) {
-				payloadPid = Integer.parseInt(result.replace("\n", ""));
-				logger.log(Level.INFO, "PID of payload has been set to " + payloadPid);
+		try (cmdExec exec = new cmdExec()) {
+			if (payloadMonitoring == true && payloadPid == 0 && wrapperPid != 0) {
+				String cmd = "pgrep -P " + wrapperPid + " -f " + payloadGrep;
+				String result = exec.executeCommandReality(cmd, "");
+				if (!result.isEmpty()) {
+					payloadPid = Integer.parseInt(result.replace("\n", ""));
+					logger.log(Level.INFO, "PID of payload has been set to " + payloadPid);
+				}
 			}
 		}
 	}
@@ -1206,8 +1212,7 @@ public class MonitoredJob implements AutoCloseable {
 
 	@Override
 	public void close() {
-		if (exec != null)
-			exec.close();
+		// nothing to close any more
 	}
 
 	/**
