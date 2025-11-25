@@ -88,6 +88,7 @@ public class BkThread extends Thread {
 	public BkThread(ApMon apm) {
 		this.apm = apm;
 		this.setDaemon(true);
+		setName("apmon.BkThread");
 	}
 
 	/**
