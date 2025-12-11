@@ -288,7 +288,7 @@ public class MonitoredJob implements AutoCloseable {
 	 * @param targetPid
 	 * @return children processes
 	 */
-	private Vector<Integer> getChildren(final int targetPid) {
+	private static Vector<Integer> getChildren(final int targetPid) {
 		try (cmdExec exec = new cmdExec()) {
 			return getChildren(targetPid, exec);
 		}
@@ -1115,6 +1115,9 @@ public class MonitoredJob implements AutoCloseable {
 		return sortedMap;
 	}
 
+	/**
+	 * @return the content of error log so far
+	 */
 	public String getErrorLogs() {
 		return errorLogs;
 	}
@@ -1137,6 +1140,9 @@ public class MonitoredJob implements AutoCloseable {
 		}
 	}
 
+	/**
+	 * @return <code>true</code> if the cpu time is over the set threshold
+	 */
 	public boolean isOverConsuming() {
 		return overConsumption >= consumptionThres;
 	}
@@ -1287,6 +1293,9 @@ public class MonitoredJob implements AutoCloseable {
 		return oldValue;
 	}
 
+	/**
+	 * @return <code>true</code> if "memory" is among the cgroup controllers that apply to the monitored task
+	 */
 	public boolean hasMemoryControllerEnabled() {
 		if (cgroup == null)
 			return false;

@@ -902,6 +902,9 @@ public class ProcReader {
 		lastCall = newCall;
 	}
 
+	/**
+	 * @param mainLoop
+	 */
 	public void updateCPUComponents(boolean mainLoop) {
 		long newCall = System.currentTimeMillis();
 		double diffCall = 0;

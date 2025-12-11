@@ -34,7 +34,6 @@ package apmon;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.StringReader;
@@ -147,7 +146,7 @@ public class BkThread extends Thread {
 		Vector<Object> paramValues;
 		// , valueTypes;
 
-		monitor.updateCall();
+		HostPropertiesMonitor.updateCall();
 		long crtTime = System.currentTimeMillis();
 
 		logger.info("Sending system monitoring information...");
