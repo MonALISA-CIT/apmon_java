@@ -313,9 +313,6 @@ public class ApMon {
 	/** The name of the host on which ApMon currently runs. */
 	String myHostname = null;
 
-	/** The IP address of the host on which ApMon currently runs. */
-	String myIP = null;
-
 	/** The number of CPUs allocated to the job slot (wall time multiplier). */
 	int numCPUs = 1;
 
@@ -425,8 +422,16 @@ public class ApMon {
 	 * @param nodename
 	 */
 	public void addJobToMonitor(final int pid, final String workDir, final String clustername, final String nodename) {
+		String node = nodename;
+
+		if (node == null) {
+			ensureSelfHostname();
+
+			node = sysNodeName;
+		}
+
 		@SuppressWarnings("resource")
-		final MonitoredJob job = new MonitoredJob(pid, workDir, clustername, nodename, numCPUs);
+		final MonitoredJob job = new MonitoredJob(pid, workDir, clustername == null ? sysClusterName : clustername, node, numCPUs);
 
 		if (!monJobs.contains(job)) {
 			monJobs.add(job);
@@ -477,7 +482,8 @@ public class ApMon {
 	/**
 	 * Get a job from monitored jobs vector
 	 *
-	 * @param pid
+	 * @param cluster
+	 * @return the instance of MonitoredJob for the given cluster name, if any
 	 */
 	public MonitoredJob getJobToMonitor(String cluster) {
 		final Iterator<MonitoredJob> it = monJobs.iterator();
@@ -919,30 +925,10 @@ public class ApMon {
 
 		/** these should be done only the first time the function is called */
 		if (firstTime) {
-			try (cmdExec exec = new cmdExec()) {
-				myHostname = exec.executeCommand("hostname -f", "");
-			}
-
-			sysNodeName = myHostname;
-
 			dgramSocket = new DatagramSocket();
 			lastJobInfoSend = System.currentTimeMillis();
 
-			try {
-				lastSysInfoSend = BkThread.getBootTime();
-			}
-			catch (Exception e) {
-				logger.warning("Error reading boot time from /proc/stat/: " + e.getMessage());
-				lastSysInfoSend = 0;
-			}
-
 			lastUtime = lastStime = 0;
-
-			BkThread.getNetConfig(netInterfaces, allMyIPs);
-			if (allMyIPs.size() > 0)
-				this.myIP = allMyIPs.get(0);
-			else
-				this.myIP = "unknown";
 
 			try {
 				baos = new ByteArrayOutputStream();
@@ -959,6 +945,33 @@ public class ApMon {
 		setSysMonitoring(sysMonitoring, sysMonitorInterval);
 		setGenMonitoring(genMonitoring, genMonitorIntervals);
 		setConfRecheck(confCheck, recheckInterval);
+	}
+
+	void ensureSelfHostname() {
+		if (sysNodeName == null) {
+			try {
+				lastSysInfoSend = BkThread.getBootTime();
+			}
+			catch (Exception e) {
+				logger.warning("Error reading boot time from /proc/stat/: " + e.getMessage());
+				lastSysInfoSend = 0;
+			}
+
+			try {
+				sysNodeName = InetAddress.getLocalHost().getCanonicalHostName();
+			}
+			catch (final UnknownHostException e) {
+				logger.log(Level.WARNING, "Error: couldn't get hostname", e);
+			}
+
+			if (sysNodeName == null || sysNodeName.isBlank() || !sysNodeName.contains("."))
+				try (cmdExec exec = new cmdExec()) {
+					myHostname = exec.executeCommand("hostname -f", "");
+				}
+
+			if (sysNodeName == null || sysNodeName.isBlank())
+				sysNodeName = "apmon.unknown";
+		}
 	}
 
 	/**
@@ -1655,8 +1668,12 @@ public class ApMon {
 	 */
 	public void setSysMonitoring(boolean sysMonitoring, long interval) {
 		int val = -1;
-		if (sysMonitoring)
+		if (sysMonitoring) {
 			logger.info("Enabling system monitoring, time interval " + interval + " s");
+			ensureSelfHostname();
+
+			logger.info("Self host name is " + sysNodeName);
+		}
 		else
 			logger.info("Disabling system monitoring...");
 
@@ -1759,10 +1776,16 @@ public class ApMon {
 		return val;
 	}
 
+	/**
+	 * Force an update of the CPU parameters
+	 */
 	public static void updateCPUComponents() {
 		HostPropertiesMonitor.updateCPU();
 	}
 
+	/**
+	 * @return the amount if idle cpu
+	 */
 	public static String getIdleCPU() {
 		return HostPropertiesMonitor.getCpuIDLECall();
 	}
