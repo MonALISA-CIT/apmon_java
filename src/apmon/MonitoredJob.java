@@ -1312,4 +1312,13 @@ public class MonitoredJob implements AutoCloseable {
 		}
 		return false;
 	}
+
+	/**
+	 * Gets the last reported CPU efficiency multiplied by number of cores
+	 * 
+	 * @return job CPU efficiency * numCPUs
+	 */
+	public double getEffectiveUsedCores() {
+		return cpuEfficiency * numCPUs;
+	}
 }
